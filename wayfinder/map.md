@@ -21,6 +21,7 @@ The WebMCP Challenge submission for Steward is filed on Devpost before **Sep 3, 
 
 - [WebMCP platform facts](tickets/T02-webmcp-platform-facts.md) — API is `document.modelContext.registerTool` (+`AbortController` lifecycle); **Atlas is dead** → targets are ChatGPT desktop app's browser + Chrome 149 flag; hand-roll the hook; use `readOnlyHint`/`untrustedContentHint`; never rely on `requestUserInteraction`; outputs ≤1.5K chars; test with `webmcp-evals`.
 - [Challenge field scan](tickets/T04-challenge-field-scan.md) — crypto/wallet lane: zero visible entries; generic human-in-the-loop framing saturated (~30 entries, closest: webmcp-sentinel) → lead with externally-enforced wallet consent + adversarial-data quarantine; **watch-only mode mandatory** (judges may lack wallet extensions in ChatGPT's browser); commerce/dev-tooling/games saturated.
+- [Approvals and token-risk data sources](tickets/T03-approvals-data-sources.md) — keyless MVP stack: Blockscout logs → Multicall3 live `allowance()` (mainnet solid); GoPlus + DexScreener + Honeypot.is for `assess_token`; `eth_simulateV1` free for simulation. Base needs hardening → [Harden the Base data lane](tickets/T14-harden-base-lane.md). Moralis account 401 (unpaid invoices) and Codex over quota — both dead today. Approval events are forgeable: live-allowance verification is mandatory.
 
 ## Not yet specified
 
