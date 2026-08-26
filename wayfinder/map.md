@@ -18,7 +18,7 @@ The WebMCP Challenge submission for Steward is filed on Devpost before **Sep 3, 
 
 <!-- one line per closed ticket: gist + link -->
 
-_None yet — map just charted._
+- [WebMCP platform facts](tickets/T02-webmcp-platform-facts.md) — API is `document.modelContext.registerTool` (+`AbortController` lifecycle); **Atlas is dead** → targets are ChatGPT desktop app's browser + Chrome 149 flag; hand-roll the hook; use `readOnlyHint`/`untrustedContentHint`; never rely on `requestUserInteraction`; outputs ≤1.5K chars; test with `webmcp-evals`.
 
 ## Not yet specified
 
