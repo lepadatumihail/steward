@@ -8,7 +8,7 @@
 
 import { formatUnits } from "viem";
 import { quarantine } from "../webmcp/quarantine";
-import type { AssessedApproval } from "./types";
+import type { AssessedApproval, TokenIntel } from "./types";
 
 export function formatAmount(raw: string, decimals: number): string {
   try {
@@ -150,4 +150,33 @@ export function formatApprovalDetail(a: AssessedApproval): string {
   }
 
   return parts.join("\n");
+}
+
+/** Agent-facing token assessment. Name and symbol are fenced as always. */
+export function formatTokenIntel(intel: TokenIntel): string {
+  const name = quarantine("token.name", intel.token.name, 80);
+  const sym = quarantine("token.symbol", intel.token.symbol, 16);
+  const sources = Object.entries(intel.sources)
+    .map(([k, ok]) => `${k}:${ok ? "ok" : "unreachable"}`)
+    .join(" ");
+
+  const lines = [
+    `Token assessment for ${sym.text} (${shortAddress(intel.address)} on ${intel.chain})`,
+    `Name: ${name.text}`,
+    `VERDICT: ${intel.verdict.toUpperCase()}`,
+  ];
+  if (intel.market) {
+    const m = intel.market;
+    lines.push(
+      `Market: ${m.priceUsd ? `$${m.priceUsd}` : "price n/a"}; deepest pool $${m.liquidityUsd == null ? "n/a" : Math.round(m.liquidityUsd).toLocaleString("en-US")}; 24h volume $${m.volume24hUsd == null ? "n/a" : Math.round(m.volume24hUsd).toLocaleString("en-US")}${m.priceChange24hPct == null ? "" : `; 24h ${m.priceChange24hPct > 0 ? "+" : ""}${m.priceChange24hPct}%`}`,
+    );
+  }
+  if (intel.signals.length > 0) {
+    lines.push("Signals:");
+    for (const sig of intel.signals.slice(0, 8)) lines.push(`  - ${sig}`);
+  } else {
+    lines.push("Signals: none from any source.");
+  }
+  lines.push(`Sources: ${sources}. These are security signals, not financial advice.`);
+  return lines.join("\n");
 }

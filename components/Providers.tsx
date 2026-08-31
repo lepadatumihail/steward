@@ -11,7 +11,7 @@ import { injected } from "wagmi/connectors";
  * have a browser-extension wallet or they use watch-only mode. No WalletConnect,
  * no modal SDK — nothing here talks to a third-party relay.
  */
-const config = createConfig({
+export const wagmiConfig = createConfig({
   chains: [mainnet, base],
   connectors: [injected()],
   transports: {
@@ -23,7 +23,7 @@ const config = createConfig({
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   return (
-    <WagmiProvider config={config}>
+    <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );

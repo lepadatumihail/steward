@@ -56,14 +56,36 @@ export interface AssessedApproval extends Approval {
 /** A write the agent has prepared but cannot perform. */
 export interface StagedAction {
   id: string;
-  kind: "revoke";
+  kind: "revoke" | "transfer";
   chain: ChainId;
-  /** The contract the user's wallet will be asked to call. */
+  /** The address the user's wallet will be asked to transact with. */
   to: string;
-  /** ABI-encoded calldata for the wallet. */
-  data: string;
+  /** ABI-encoded calldata; absent for a native-ETH transfer. */
+  data?: string;
+  /** Native value in wei as a decimal string; absent for contract calls. */
+  valueWei?: string;
   /** Plain-language description shown in Steward's own confirmation UI. */
   summary: string;
-  approvalId: string;
+  /** Present when the action targets a scanned approval. */
+  approvalId?: string;
   createdAt: string;
+}
+
+/** Cross-source token risk intelligence, composed server-side. */
+export interface TokenIntel {
+  address: string;
+  chain: ChainId;
+  token: { name: string; symbol: string; decimals: number };
+  /** Which keyless sources answered; a verdict needs at least two. */
+  sources: { goplus: boolean; dexscreener: boolean; honeypot: boolean };
+  market: {
+    priceUsd: string | null;
+    liquidityUsd: number | null;
+    volume24hUsd: number | null;
+    priceChange24hPct: number | null;
+  } | null;
+  /** Human-readable risk signals, worst first. */
+  signals: string[];
+  verdict: "high-risk" | "caution" | "no-major-flags" | "insufficient-data";
+  checkedAt: string;
 }

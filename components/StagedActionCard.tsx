@@ -45,7 +45,9 @@ export function StagedActionCard({
           </p>
           <p className="mt-1 text-sm">{action.summary}</p>
           <p className="mt-1 text-xs text-neutral-500">
-            Calls {shortAddress(action.to)} on {action.chain}
+            {action.data
+              ? `Calls ${shortAddress(action.to)} on ${action.chain}`
+              : `Sends native ETH to ${shortAddress(action.to)} on ${action.chain}`}
           </p>
 
           {txHash ? (
@@ -61,14 +63,16 @@ export function StagedActionCard({
               </a>
             </p>
           ) : (
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">
-                Exact calldata your wallet will be asked to sign
-              </summary>
-              <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-950 p-2 font-mono text-[10px] leading-relaxed text-neutral-400">
-                {action.data}
-              </pre>
-            </details>
+            action.data && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">
+                  Exact calldata your wallet will be asked to sign
+                </summary>
+                <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-950 p-2 font-mono text-[10px] leading-relaxed text-neutral-400">
+                  {action.data}
+                </pre>
+              </details>
+            )
           )}
 
           {txError && (
@@ -115,7 +119,8 @@ export function StagedActionCard({
               onClick={() =>
                 sendTransaction({
                   to: action.to as `0x${string}`,
-                  data: action.data as `0x${string}`,
+                  data: action.data as `0x${string}` | undefined,
+                  value: action.valueWei ? BigInt(action.valueWei) : undefined,
                   chainId: targetChain.id,
                 })
               }

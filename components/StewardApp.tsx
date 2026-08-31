@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { encodeFunctionData, isAddress } from "viem";
+import {
+  encodeFunctionData,
+  isAddress,
+  parseEther,
+  parseUnits,
+} from "viem";
+import { normalize } from "viem/ens";
+import { getEnsAddress, readContract } from "wagmi/actions";
+import { erc20Abi } from "viem";
+import { wagmiConfig } from "./Providers";
 import { ProviderNotFoundError,
   useConnect, useConnection, useDisconnect } from "wagmi";
 import { useStewardTool } from "@/lib/webmcp/useStewardTool";
@@ -16,6 +25,7 @@ import { assessApproval } from "@/lib/steward/risk";
 import {
   formatApprovalDetail,
   formatApprovalsForAgent,
+  formatTokenIntel,
   resolveApprovalId,
   shortAddress,
 } from "@/lib/steward/format";
@@ -23,9 +33,11 @@ import type {
   AssessedApproval,
   ChainId,
   StagedAction,
+  TokenIntel,
 } from "@/lib/steward/types";
 import { ApprovalCard } from "./ApprovalCard";
 import { StagedActionCard } from "./StagedActionCard";
+import { TokenIntelCard } from "./TokenIntelCard";
 import { ToolStatusPanel } from "./ToolStatusPanel";
 
 // Runs once on the client, before any component effect, so tools always have a
@@ -79,6 +91,7 @@ export function StewardApp() {
   const [input, setInput] = useState("");
   const [chain, setChain] = useState<ChainId>("ethereum");
   const [staged, setStaged] = useState<StagedAction[]>([]);
+  const [intel, setIntel] = useState<TokenIntel | null>(null);
   // Read after mount: the server has no model context, so reading during render
   // would produce a hydration mismatch.
   const [contextMode, setContextMode] = useState<ModelContextMode>("none");
@@ -282,10 +295,211 @@ export function StewardApp() {
     },
   });
 
+  const assessTool = useStewardTool<{ token: string; chain?: string }>({
+    name: "assess_token",
+    description:
+      "Assess whether an ERC-20 token is safe to hold or exit: honeypot simulation, sell taxes, owner powers, contract verification, and real market liquidity, cross-checked across three independent sources. Pass the token CONTRACT address (scan_approvals ids embed it). Security signals, not financial advice.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: {
+          type: "string",
+          description: "The token's contract address (0x…).",
+        },
+        chain: {
+          type: "string",
+          description: '"Ethereum" (default) or "Base".',
+        },
+      },
+      required: ["token"],
+    },
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: async ({ token, chain: chainArg }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const addr = token?.trim();
+      if (!isAddress(addr)) {
+        throw new Error(
+          `"${token}" is not a token contract address. Pass the 0x… address — scan_approvals ids contain it as the middle segment.`,
+        );
+      }
+      const res = await fetch(
+        `/api/token?address=${addr}&chain=${targetChain}`,
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { error?: string } | null)?.error ??
+            `assessment failed (${res.status})`,
+        );
+      }
+      const result = (await res.json()) as TokenIntel;
+      setIntel(result); // the dashboard shows what the agent just learned
+      return formatTokenIntel(result);
+    },
+  });
+
+  const transferTool = useStewardTool<{
+    token: string;
+    amount: string;
+    to: string;
+    chain?: string;
+  }>({
+    name: "stage_transfer",
+    description:
+      'Prepare a token or ETH transfer and place it in Steward\'s review queue. This does NOT send anything: the user must review and sign it in their own wallet. token is a contract address or "ETH"; amount is a decimal string; to is a 0x address or ENS name.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: {
+          type: "string",
+          description: 'Token contract address (0x…) or "ETH" for native ether.',
+        },
+        amount: {
+          type: "string",
+          description: 'Human units, e.g. "0.05" or "125.5".',
+        },
+        to: {
+          type: "string",
+          description: "Recipient: 0x address or ENS name.",
+        },
+        chain: {
+          type: "string",
+          description: '"Ethereum" (default) or "Base".',
+        },
+      },
+      required: ["token", "amount", "to"],
+    },
+    // Stages state the user must act on, and echoes a token symbol.
+    annotations: { readOnlyHint: false, untrustedContentHint: true },
+    execute: async ({ token, amount, to, chain: chainArg }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const chainId = targetChain === "ethereum" ? 1 : 8453;
+
+      if (!/^\d+(\.\d+)?$/.test(amount.trim()) || Number(amount) <= 0) {
+        throw new Error(
+          `"${amount}" is not a positive decimal amount, e.g. "0.05".`,
+        );
+      }
+
+      // Resolve the recipient. ENS lives on mainnet regardless of the chain.
+      let recipient = to.trim();
+      if (!isAddress(recipient)) {
+        if (!/\.eth$/i.test(recipient)) {
+          throw new Error(
+            `"${to}" is neither a 0x address nor an ENS name.`,
+          );
+        }
+        const resolved = await getEnsAddress(wagmiConfig, {
+          name: normalize(recipient),
+          chainId: 1,
+        });
+        if (!resolved) throw new Error(`ENS name "${to}" does not resolve.`);
+        recipient = resolved;
+      }
+
+      const isNative = /^(eth|native)$/i.test(token.trim());
+      let action: StagedAction;
+      if (isNative) {
+        action = {
+          id: `transfer-eth-${recipient}-${Date.now()}`,
+          kind: "transfer",
+          chain: targetChain,
+          to: recipient,
+          valueWei: parseEther(amount as `${number}`).toString(),
+          summary: `Send ${amount} ETH to ${shortAddress(recipient)} on ${targetChain}`,
+          createdAt: new Date().toISOString(),
+        };
+      } else {
+        if (!isAddress(token.trim())) {
+          throw new Error(
+            `"${token}" is not a token contract address. Use the 0x… address or "ETH".`,
+          );
+        }
+        const tokenAddr = token.trim() as `0x${string}`;
+        const [decimals, symbol] = await Promise.all([
+          readContract(wagmiConfig, {
+            address: tokenAddr,
+            abi: erc20Abi,
+            functionName: "decimals",
+            chainId,
+          }),
+          readContract(wagmiConfig, {
+            address: tokenAddr,
+            abi: erc20Abi,
+            functionName: "symbol",
+            chainId,
+          }).catch(() => "tokens"),
+        ]);
+        const units = parseUnits(amount as `${number}`, Number(decimals));
+        action = {
+          id: `transfer-${tokenAddr}-${recipient}-${Date.now()}`,
+          kind: "transfer",
+          chain: targetChain,
+          to: tokenAddr,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "transfer",
+            args: [recipient as `0x${string}`, units],
+          }),
+          summary: `Send ${amount} ${sanitizeUntrusted(String(symbol), 16).safe} to ${shortAddress(recipient)} on ${targetChain}`,
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+      setStaged((prev) => [...prev, action]);
+      return (
+        `awaiting_user_confirmation\n` +
+        `${action.summary}.\n` +
+        `It is now in Steward's review queue. The user must confirm and sign it in their wallet. ` +
+        `You cannot complete this action, and neither can this page.`
+      );
+    },
+  });
+
+  const gasTool = useStewardTool<{ chain?: string }>({
+    name: "check_gas",
+    description:
+      "Read current network fees and report whether this is a cheap, typical, or elevated moment relative to the last few minutes, with the estimated cost of one revoke transaction.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain: {
+          type: "string",
+          description: '"Ethereum" (default) or "Base".',
+        },
+      },
+    },
+    annotations: { readOnlyHint: true },
+    execute: async ({ chain: chainArg }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const res = await fetch(`/api/gas?chain=${targetChain}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { error?: string } | null)?.error ??
+            `gas read failed (${res.status})`,
+        );
+      }
+      const g = await res.json();
+      return (
+        `Gas on ${g.chain} is ${g.verdict.toUpperCase()} right now.\n` +
+        `Base fee ${g.baseFeeGwei} gwei (window ${g.windowMinGwei}-${g.windowMaxGwei}, median ${g.windowMedianGwei}) over the ${g.windowDescription}; median priority tip ${g.priorityP50Gwei} gwei.\n` +
+        `One revoke costs about ${g.revokeCostEth} ETH at these fees.\n` +
+        `"Cheap" and "elevated" are relative to that window, not to history.`
+      );
+    },
+  });
+
   const tools = [
     { label: "scan_approvals", state: scanTool },
     { label: "explain_approval", state: explainTool },
+    { label: "assess_token", state: assessTool },
+    { label: "check_gas", state: gasTool },
     { label: "stage_revoke", state: revokeTool },
+    { label: "stage_transfer", state: transferTool },
   ];
 
   const worst = scan.approvals.reduce(
@@ -380,6 +594,8 @@ export function StewardApp() {
       </form>
 
       <ToolStatusPanel tools={tools} mode={contextMode} />
+
+      {intel && <TokenIntelCard intel={intel} onDismiss={() => setIntel(null)} />}
 
       {scan.status === "error" && (
         <div className="mt-6 rounded-xl border border-red-900/60 bg-red-950/20 p-4 text-sm text-red-300">
