@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { encodeFunctionData, isAddress } from "viem";
-import { useConnect, useConnection, useDisconnect } from "wagmi";
+import { ProviderNotFoundError,
+  useConnect, useConnection, useDisconnect } from "wagmi";
 import { useStewardTool } from "@/lib/webmcp/useStewardTool";
 import {
   getModelContextMode,
@@ -84,7 +85,7 @@ export function StewardApp() {
   useEffect(() => setContextMode(getModelContextMode()), []);
 
   const connection = useConnection();
-  const { connectors, connect } = useConnect();
+  const { connectors, connect, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
 
   // Tools close over the latest scan through a ref, so an agent that scanned
@@ -108,8 +109,16 @@ export function StewardApp() {
         const res = await fetch(
           `/api/scan?address=${encodeURIComponent(target)}&chain=${targetChain}`,
         );
+        if (!res.ok) {
+          // Platform-level failures (Vercel 504 on timeout) have plain-text
+          // bodies; parsing first turns them into JSON stack-trace strings.
+          const body = await res.json().catch(() => null);
+          throw new Error(
+            (body as { error?: string } | null)?.error ??
+              `scan failed (${res.status}) — try again in a minute`,
+          );
+        }
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? `scan failed (${res.status})`);
         const next: ScanState = {
           status: "live",
           address: body.address,
@@ -285,9 +294,9 @@ export function StewardApp() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <header className="mb-8">
-        <div className="flex items-baseline justify-between gap-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight">
             Steward
             <span className="ml-3 text-sm font-normal text-neutral-400">
@@ -323,6 +332,13 @@ export function StewardApp() {
             )}
           </div>
         </div>
+        {!connection.isConnected && connectError && (
+          <p className="mt-2 text-xs text-amber-400/80">
+            {connectError instanceof ProviderNotFoundError
+              ? "No browser wallet found — Steward still works watch-only; a wallet is only needed to sign revokes."
+              : connectError.message.split("\n")[0]}
+          </p>
+        )}
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-400">
           Steward audits the token approvals a wallet has handed out, scores what
           each one puts at risk, and stages revokes for you to sign. An agent in
@@ -332,7 +348,7 @@ export function StewardApp() {
       </header>
 
       <form
-        className="mb-8 flex gap-2"
+        className="mb-8 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           const next = input.trim();
@@ -343,7 +359,7 @@ export function StewardApp() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Audit any address or ENS name — no wallet needed (try vitalik.eth)"
-          className="flex-1 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-neutral-600"
+          className="min-w-0 flex-1 basis-56 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-neutral-600"
         />
         <select
           value={chain}
@@ -408,6 +424,11 @@ export function StewardApp() {
           {scan.status === "loading" ? (
             <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-8 text-center text-sm text-neutral-500">
               Scanning approval history and verifying live allowances on-chain…
+            </div>
+          ) : scan.approvals.length === 0 ? (
+            <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/10 p-8 text-center text-sm text-neutral-400">
+              No live token approvals found for {shortAddress(scan.address)}.
+              This wallet is clean — nothing to revoke.
             </div>
           ) : (
             [...scan.approvals]

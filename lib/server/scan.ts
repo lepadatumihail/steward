@@ -250,12 +250,21 @@ async function verifySpenders(
             `https://eth.blockscout.com/api/v2/smart-contracts/${spender}`,
             { signal: AbortSignal.timeout(8_000) },
           );
-          const isVerified =
-            res.ok &&
-            ((await res.json()) as { is_verified?: boolean }).is_verified ===
+          if (res.ok) {
+            const isVerified =
+              ((await res.json()) as { is_verified?: boolean }).is_verified ===
               true;
-          spenderCache.set(spender, isVerified);
-          out.set(spender, isVerified);
+            spenderCache.set(spender, isVerified);
+            out.set(spender, isVerified);
+          } else if (res.status === 404) {
+            // Definitive: not a verified contract. Safe to cache.
+            spenderCache.set(spender, false);
+            out.set(spender, false);
+          } else {
+            // Throttle/5xx: unverified for THIS scan only — never cached,
+            // or one bad minute would darken every later scan on the instance.
+            out.set(spender, false);
+          }
         } catch {
           out.set(spender, false); // conservative, and NOT cached
         }

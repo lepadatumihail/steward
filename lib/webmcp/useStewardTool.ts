@@ -136,29 +136,32 @@ export function useStewardTool<Args = Record<string, unknown>>(
     async (args: Args, ctx?: { signal?: AbortSignal }): Promise<ToolResult> => {
       onInvokeRef.current?.(args);
       setInvocations((n) => n + 1);
+      // Notice + budget apply to EVERY envelope this hook emits — error
+      // envelopes included. Error text echoes agent input and upstream
+      // failure messages, which are exactly as untrusted as tool output.
+      const finalize = (envelope: ToolResult): ToolResult =>
+        enforceBudget(
+          untrusted
+            ? {
+                ...envelope,
+                content: [
+                  { type: "text", text: QUARANTINE_NOTICE },
+                  ...envelope.content,
+                ],
+              }
+            : envelope,
+        );
       try {
         const raw = await executeRef.current(args, ctx);
-        const envelope = toEnvelope(raw);
-        // A tool that handles attacker-controlled data always carries the
-        // notice — enforced here so no tool author can omit it.
-        const withNotice: ToolResult = untrusted
-          ? {
-              ...envelope,
-              content: [
-                { type: "text", text: QUARANTINE_NOTICE },
-                ...envelope.content,
-              ],
-            }
-          : envelope;
-        return enforceBudget(withNotice);
+        return finalize(toEnvelope(raw));
       } catch (cause) {
         // Descriptive errors let the model self-correct rather than retry blind.
         const message =
           cause instanceof Error ? cause.message : String(cause);
-        return {
+        return finalize({
           content: [{ type: "text", text: `Tool "${name}" failed: ${message}` }],
           isError: true,
-        };
+        });
       }
     },
     [name, untrusted],

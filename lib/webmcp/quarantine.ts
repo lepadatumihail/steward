@@ -34,12 +34,19 @@ export const DEFAULT_FIELD_MAX = 96;
  * is deleted outright, which reveals words split by zero-width characters.
  */
 const CONTROL_WHITESPACE = /[\u0009-\u000D\u0085\u2028\u2029]/g;
-const CONTROL_OTHER = /[\u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F]/g;
-const ZERO_WIDTH = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+/**
+ * Everything invisible that is not plain whitespace, by Unicode property
+ * rather than an enumerated list: C0/C1 controls, format characters (bidi
+ * marks and overrides, ALM, BOM), everything Unicode itself marks
+ * default-ignorable (zero-widths, joiners, Hangul fillers, variation
+ * selectors, Mongolian vowel separator), plus the braille blank, which is
+ * none of those but renders as empty space. An enumerated list here was a
+ * confirmed bypass: U+2800 and U+061C sailed through it.
+ */
+const INVISIBLE_ANY = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800]/gu;
 
-/** Union of the above, non-global, for detection (a /g regex carries lastIndex state). */
-const HAS_INVISIBLE =
-  /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u2028\u2029\uFEFF]/;
+/** Detection variant: same set minus ordinary tab/newline/CR, non-global. */
+const HAS_INVISIBLE = /(?![\t\n\r])[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800]/u;
 
 /**
  * Phrases that have no business in a token name and every business in an
@@ -88,18 +95,25 @@ export function sanitizeUntrusted(
     };
   }
 
-  const flags = new Set<string>();
-  for (const [pattern, label] of INJECTION_PATTERNS) {
-    if (pattern.test(raw)) flags.add(label);
-  }
-
+  // Neutralise FIRST: NFKC fold (so confusables become the ASCII they mimic),
+  // whitespace controls to spaces, invisibles deleted (so split keywords
+  // rejoin), fence sentinels defanged, whitespace collapsed.
   let out = raw.normalize("NFKC");
   out = out.replace(CONTROL_WHITESPACE, " ");
-  out = out.replace(CONTROL_OTHER, "");
-  out = out.replace(ZERO_WIDTH, "");
+  out = out.replace(INVISIBLE_ANY, "");
   // Unforgeable fence: the sentinels simply cannot survive input.
   out = out.split(FENCE_OPEN).join("(").split(FENCE_CLOSE).join(")");
   out = out.replace(/\s+/g, " ").trim();
+
+  // Detect on BOTH the raw bytes and the neutralised text. Raw catches
+  // pre-strip signals (hidden characters via HAS_INVISIBLE); the neutralised
+  // form catches what raw hides — fullwidth confusables that fold into a
+  // clean ASCII attack, and keywords an invisible had split in two. Both were
+  // confirmed bypasses when detection ran on raw alone.
+  const flags = new Set<string>();
+  for (const [pattern, label] of INJECTION_PATTERNS) {
+    if (pattern.test(raw) || pattern.test(out)) flags.add(label);
+  }
 
   if (out.length > maxLen) {
     out = out.slice(0, maxLen - 1).trimEnd() + "…";
