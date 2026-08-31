@@ -28,12 +28,12 @@ to Steward's landing view.*
 
 ## Beat 2 — Agent audit, watch-only (0:25–1:10)
 
-*Screen: Steward open; WebMCP panel shows 3 tools registered. Agent (or
+*Screen: Steward open; WebMCP panel shows 6 tools registered. Agent (or
 DevTools Run-tool) calls `scan_approvals` with vitalik.eth. Dashboard flips to
 LIVE, worst approvals ranked. Expand "Why this score".*
 
-> "Steward is a wallet-safety cockpit that speaks WebMCP — it registers three
-> tools with the browser's native model context, so any agent in your browser
+> "Steward is a wallet copilot with a safety core that speaks WebMCP — it
+> registers six tools with the browser's native model context, so any agent in your browser
 > can drive it. Ask it to audit any address — no wallet connected, live
 > on-chain data. Twenty-two hundred live approvals, every allowance verified
 > on-chain — because approval events can be forged, Steward never trusts an
@@ -54,19 +54,29 @@ name in the tool result.*
 > attack — quoted, defused, as data. This page assumes the chain is hostile,
 > because it is."
 
-## Beat 4 — Stage and sign (1:50–2:30)
+## Beat 4 — The trading partner (1:50–2:10)
+
+*Screen: agent calls `assess_token` on the suspect token — Token intel card
+slides in with verdict + liquidity. Then `check_gas` returns "CHEAP".*
+
+> "And it's more than an auditor. Ask whether a token is safe to exit — three
+> independent sources: contract security, real liquidity, a sell simulation.
+> Ask if now is a cheap moment to transact. The agent researches like a
+> partner — but notice what it still can't do."
+
+## Beat 5 — Stage and sign (2:10–2:40)
 
 *Screen: burner wallet on Base. Agent calls `stage_revoke`. Review-queue card
 appears: plain-language summary + exact calldata. Click "Sign in wallet" —
 MetaMask popup renders. Confirm. Tx hash appears, click through to Basescan.*
 
-> "Fixing it: the agent stages a revoke. Staging is all it can do — the tool
+> "Act. The agent stages the revoke — staging is all it can do. The tool
 > returns 'awaiting user confirmation', and the action sits in a review queue
 > showing the exact calldata my wallet will sign. This popup is the whole
 > point: it belongs to my wallet, not the page. No agent can render it, click
 > it, or bypass it. I sign — and the revoke is real, on-chain, on Base."
 
-## Beat 5 — Why only WebMCP (2:30–2:50)
+## Beat 6 — Why only WebMCP (2:40–2:55)
 
 *Screen: pull back to the full app; WebMCP panel showing the session's tool
 calls tally.*
@@ -80,7 +90,7 @@ calls tally.*
 
 ---
 
-Fallback if the burner isn't ready by shoot time: Beat 4 shrinks to staging +
+Fallback if the burner isn't ready by shoot time: Beat 5 shrinks to staging +
 the disabled-until-connected Sign button with an honest line ("signing works
-with any injected wallet"), and Beats 2–3 stretch. Weaker, but honest — never
+with any injected wallet"), and Beats 2–4 stretch. Weaker, but honest — never
 fake the signing moment.
