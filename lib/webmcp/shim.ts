@@ -84,11 +84,29 @@ export function installShim(): ModelContextMode {
       );
     },
 
-    executeTool(name, args, options) {
-      const tool = tools.get(String(name));
-      if (!tool) return Promise.reject(new Error(`No such tool: ${name}`));
+    // Mirrors native Chrome (151/152) as closely as is useful: it takes the
+    // RegisteredTool handle from getTools() and a JSON STRING of arguments.
+    // Verified against native on 2026-09-01 — the object-args form the spec
+    // moved to on 2026-08-17 is rejected by shipping Chrome. We accept both
+    // shapes so page-side self-tests behave the same either way.
+    executeTool(tool, args, options) {
+      const name =
+        typeof tool === "string"
+          ? tool
+          : (tool as { name?: string } | null)?.name;
+      const found = name ? tools.get(name) : undefined;
+      if (!found) return Promise.reject(new Error(`No such tool: ${String(name)}`));
+
+      let parsed: unknown = args;
+      if (typeof args === "string") {
+        try {
+          parsed = args.length ? JSON.parse(args) : {};
+        } catch {
+          return Promise.reject(new Error("Failed to parse input arguments"));
+        }
+      }
       return Promise.resolve(
-        tool.execute(args as never, { signal: options?.signal }),
+        found.execute(parsed as never, { signal: options?.signal }),
       );
     },
 

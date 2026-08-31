@@ -53,9 +53,14 @@ export interface ModelContext {
     options?: { signal?: AbortSignal },
   ): Promise<void> | void;
   getTools?(options?: unknown): Promise<unknown>;
+  /**
+   * Native Chrome takes the RegisteredTool handle returned by getTools() plus a
+   * JSON STRING of arguments (verified 2026-09-01). The spec moved to object
+   * args on 2026-08-17; shipping Chrome has not followed yet.
+   */
   executeTool?(
-    name: string,
-    args: unknown,
+    tool: unknown,
+    args?: unknown,
     options?: { signal?: AbortSignal },
   ): Promise<unknown>;
   addEventListener?(type: "toolchange", cb: () => void): void;
