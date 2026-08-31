@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { encodeFunctionData, isAddress } from "viem";
+import { useConnect, useConnection, useDisconnect } from "wagmi";
 import { useStewardTool } from "@/lib/webmcp/useStewardTool";
 import {
   getModelContextMode,
@@ -14,9 +15,14 @@ import { assessApproval } from "@/lib/steward/risk";
 import {
   formatApprovalDetail,
   formatApprovalsForAgent,
+  resolveApprovalId,
   shortAddress,
 } from "@/lib/steward/format";
-import type { AssessedApproval, StagedAction } from "@/lib/steward/types";
+import type {
+  AssessedApproval,
+  ChainId,
+  StagedAction,
+} from "@/lib/steward/types";
 import { ApprovalCard } from "./ApprovalCard";
 import { StagedActionCard } from "./StagedActionCard";
 import { ToolStatusPanel } from "./ToolStatusPanel";
@@ -38,81 +44,170 @@ const ERC20_APPROVE_ABI = [
   },
 ] as const;
 
+const DEMO_ASSESSED: AssessedApproval[] = DEMO_APPROVALS.map((a) => ({
+  ...a,
+  risk: assessApproval(a),
+}));
+
+interface ScanState {
+  status: "demo" | "loading" | "live" | "error";
+  address: string;
+  chain: ChainId;
+  approvals: AssessedApproval[];
+  /** Server meta for live scans; demo mode explains itself instead. */
+  coverage?: string;
+  totalCount?: number;
+  error?: string;
+}
+
+const DEMO_STATE: ScanState = {
+  status: "demo",
+  address: DEMO_ADDRESS,
+  chain: "ethereum",
+  approvals: DEMO_ASSESSED,
+  coverage: "deterministic demo fixture (includes a planted hostile token)",
+  totalCount: DEMO_ASSESSED.length,
+};
+
+function looksLikeTarget(value: string): boolean {
+  return isAddress(value) || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.eth$/i.test(value);
+}
+
 export function StewardApp() {
-  const [address, setAddress] = useState(DEMO_ADDRESS);
+  const [scan, setScan] = useState<ScanState>(DEMO_STATE);
   const [input, setInput] = useState("");
+  const [chain, setChain] = useState<ChainId>("ethereum");
   const [staged, setStaged] = useState<StagedAction[]>([]);
   // Read after mount: the server has no model context, so reading during render
   // would produce a hydration mismatch.
   const [contextMode, setContextMode] = useState<ModelContextMode>("none");
   useEffect(() => setContextMode(getModelContextMode()), []);
 
-  // Watch-only by design: any pasted address is auditable with no wallet.
-  const approvals: AssessedApproval[] = useMemo(
-    () => DEMO_APPROVALS.map((a) => ({ ...a, risk: assessApproval(a) })),
+  const connection = useConnection();
+  const { connectors, connect } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  // Tools close over the latest scan through a ref, so an agent that scanned
+  // one address and explains an approval a second later never reads stale state.
+  const scanRef = useRef(scan);
+  scanRef.current = scan;
+
+  /**
+   * One scan path for humans and agents. The demo address never touches the
+   * network — it must keep working if every data source dies during judging.
+   */
+  const runScan = useCallback(
+    async (target: string, targetChain: ChainId): Promise<ScanState> => {
+      if (target.toLowerCase() === DEMO_ADDRESS.toLowerCase()) {
+        scanRef.current = DEMO_STATE;
+        setScan(DEMO_STATE);
+        return DEMO_STATE;
+      }
+      setScan((prev) => ({ ...prev, status: "loading" }));
+      try {
+        const res = await fetch(
+          `/api/scan?address=${encodeURIComponent(target)}&chain=${targetChain}`,
+        );
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? `scan failed (${res.status})`);
+        const next: ScanState = {
+          status: "live",
+          address: body.address,
+          chain: targetChain,
+          approvals: body.approvals,
+          coverage: body.meta.coverage,
+          totalCount: body.meta.liveNonzero,
+        };
+        // Ref first, state second: agents chain tool calls faster than React
+        // renders, and the next call must see THIS scan, not the previous one.
+        scanRef.current = next;
+        setScan(next);
+        return next;
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        const next: ScanState = {
+          ...scanRef.current,
+          status: "error",
+          error: message,
+        };
+        setScan(next);
+        return next;
+      }
+    },
     [],
   );
 
-  const findApproval = useCallback(
-    (id: string) =>
-      approvals.find(
-        (a) => a.id === id || a.id.toLowerCase() === id.toLowerCase(),
-      ),
-    [approvals],
-  );
+  const findApproval = useCallback((id: string) => {
+    return resolveApprovalId(id, scanRef.current.approvals);
+  }, []);
 
-  const stageRevoke = useCallback(
-    (approval: AssessedApproval): StagedAction => {
-      const action: StagedAction = {
-        id: `revoke-${approval.id}-${staged.length}`,
-        kind: "revoke",
-        chain: approval.chain,
-        to: approval.token.address,
-        data: encodeFunctionData({
-          abi: ERC20_APPROVE_ABI,
-          functionName: "approve",
-          args: [approval.spender.address as `0x${string}`, 0n],
-        }),
-        // The symbol is attacker-chosen: sanitise before it reaches the UI,
-        // the agent, or the wallet-confirmation text.
-        summary: `Set allowance to 0 for ${approval.spender.knownProtocol ?? shortAddress(approval.spender.address)} on ${sanitizeUntrusted(approval.token.symbol, 16).safe}`,
-        approvalId: approval.id,
-        createdAt: new Date().toISOString(),
-      };
-      setStaged((prev) =>
-        prev.some((s) => s.approvalId === approval.id) ? prev : [...prev, action],
-      );
-      return action;
-    },
-    [staged.length],
-  );
+  const stageRevoke = useCallback((approval: AssessedApproval): StagedAction => {
+    const action: StagedAction = {
+      id: `revoke-${approval.id}`,
+      kind: "revoke",
+      chain: approval.chain,
+      to: approval.token.address,
+      data: encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [approval.spender.address as `0x${string}`, 0n],
+      }),
+      // The symbol is attacker-chosen: sanitise before it reaches the UI,
+      // the agent, or the wallet-confirmation text.
+      summary: `Set allowance to 0 for ${approval.spender.knownProtocol ?? shortAddress(approval.spender.address)} on ${sanitizeUntrusted(approval.token.symbol, 16).safe}`,
+      approvalId: approval.id,
+      createdAt: new Date().toISOString(),
+    };
+    setStaged((prev) =>
+      prev.some((s) => s.approvalId === approval.id) ? prev : [...prev, action],
+    );
+    return action;
+  }, []);
 
   // ---- WebMCP tool surface -------------------------------------------------
 
-  const scanTool = useStewardTool<{ address?: string }>({
+  const scanTool = useStewardTool<{ address?: string; chain?: string }>({
     name: "scan_approvals",
     description:
-      "Audit every live ERC-20 token approval for a wallet address and score each one for risk. Works for any address without connecting a wallet. Returns the worst approvals first.",
+      "Audit the live ERC-20 token approvals of any wallet address (0x… or ENS name) and score each one for risk. Live on-chain data, no wallet connection needed. Returns the worst approvals first and updates Steward's dashboard.",
     inputSchema: {
       type: "object",
       properties: {
         address: {
           type: "string",
           description:
-            "The wallet address to audit. Defaults to the address currently shown in Steward.",
+            "Wallet to audit: a 0x address or ENS name. Omit to use the address currently shown in Steward.",
+        },
+        chain: {
+          type: "string",
+          description:
+            'Which chain to scan: "Ethereum" (default, full history) or "Base" (recent history).',
         },
       },
     },
     // Read-only, and it carries token names the token itself chose.
     annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: ({ address: requested }) => {
-      const target = requested?.trim() || address;
-      if (requested && !isAddress(requested.trim())) {
+    execute: async ({ address: requested, chain: chainArg }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const target = requested?.trim() || scanRef.current.address;
+      if (requested && !looksLikeTarget(target)) {
         throw new Error(
-          `"${requested}" is not a valid Ethereum address. Provide a 0x-prefixed 40-hex-character address.`,
+          `"${requested}" is not a valid address. Provide a 0x-prefixed address or an ENS name like vitalik.eth.`,
         );
       }
-      return formatApprovalsForAgent(target, approvals);
+      const result =
+        target.toLowerCase() === scanRef.current.address.toLowerCase() &&
+        scanRef.current.status !== "error"
+          ? scanRef.current
+          : await runScan(target, targetChain);
+      if (result.status === "error") {
+        throw new Error(result.error ?? "live scan unavailable");
+      }
+      return formatApprovalsForAgent(result.address, result.approvals, {
+        totalCount: result.totalCount,
+        coverage: result.coverage,
+      });
     },
   });
 
@@ -125,7 +220,7 @@ export function StewardApp() {
       properties: {
         approval_id: {
           type: "string",
-          description: "The id from scan_approvals, e.g. ethereum:0xa0b8...:0x68b3...",
+          description: "The id from scan_approvals; the short form it prints (ethereum:0xabcd…ef12:0xabcd…ef12) is accepted as-is.",
         },
       },
       required: ["approval_id"],
@@ -135,7 +230,7 @@ export function StewardApp() {
       const found = findApproval(approval_id);
       if (!found) {
         throw new Error(
-          `No approval with id "${approval_id}". Call scan_approvals first and use an id from its output.`,
+          `No approval with id "${approval_id}" in the current scan. Call scan_approvals first and use an id from its output.`,
         );
       }
       return formatApprovalDetail(found);
@@ -151,7 +246,7 @@ export function StewardApp() {
       properties: {
         approval_id: {
           type: "string",
-          description: "The id of the approval to revoke, from scan_approvals.",
+          description: "The id of the approval to revoke, exactly as printed by scan_approvals.",
         },
       },
       required: ["approval_id"],
@@ -163,7 +258,7 @@ export function StewardApp() {
       const found = findApproval(approval_id);
       if (!found) {
         throw new Error(
-          `No approval with id "${approval_id}". Call scan_approvals first.`,
+          `No approval with id "${approval_id}" in the current scan. Call scan_approvals first.`,
         );
       }
       const action = stageRevoke(found);
@@ -184,7 +279,7 @@ export function StewardApp() {
     { label: "stage_revoke", state: revokeTool },
   ];
 
-  const worst = approvals.reduce(
+  const worst = scan.approvals.reduce(
     (acc, a) => (a.risk.score > acc ? a.risk.score : acc),
     0,
   );
@@ -199,12 +294,34 @@ export function StewardApp() {
               wallet safety, agent-readable
             </span>
           </h1>
-          <a
-            href="https://github.com"
-            className="text-xs text-neutral-500 underline-offset-4 hover:underline"
-          >
-            open source
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://github.com/lepadatumihail/steward"
+              className="text-xs text-neutral-500 underline-offset-4 hover:underline"
+            >
+              open source
+            </a>
+            {connection.isConnected ? (
+              <button
+                onClick={() => disconnect()}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-900"
+                title="Disconnect wallet"
+              >
+                {shortAddress(connection.address ?? "")} ·{" "}
+                <span className="text-neutral-500">disconnect</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  const injectedConnector = connectors[0];
+                  if (injectedConnector) connect({ connector: injectedConnector });
+                }}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium hover:bg-neutral-900"
+              >
+                Connect wallet
+              </button>
+            )}
+          </div>
         </div>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-400">
           Steward audits the token approvals a wallet has handed out, scores what
@@ -219,52 +336,98 @@ export function StewardApp() {
         onSubmit={(e) => {
           e.preventDefault();
           const next = input.trim();
-          if (isAddress(next)) setAddress(next);
+          if (looksLikeTarget(next)) void runScan(next, chain);
         }}
       >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={`Audit any address — no wallet needed (${shortAddress(DEMO_ADDRESS)})`}
+          placeholder="Audit any address or ENS name — no wallet needed (try vitalik.eth)"
           className="flex-1 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-neutral-600"
         />
+        <select
+          value={chain}
+          onChange={(e) => setChain(e.target.value as ChainId)}
+          className="rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-2 text-sm text-neutral-300"
+          aria-label="Chain"
+        >
+          <option value="ethereum">Ethereum</option>
+          <option value="base">Base</option>
+        </select>
         <button
           type="submit"
-          className="rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium hover:bg-neutral-900"
+          disabled={scan.status === "loading"}
+          className="rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium hover:bg-neutral-900 disabled:opacity-50"
         >
-          Audit
+          {scan.status === "loading" ? "Scanning…" : "Audit"}
         </button>
       </form>
 
       <ToolStatusPanel tools={tools} mode={contextMode} />
 
-      <section className="mt-8">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium text-neutral-300">
-            Approvals for {shortAddress(address)}
-          </h2>
-          <span className="text-xs text-neutral-500">
-            {approvals.length} live · worst score {worst}
+      {scan.status === "error" && (
+        <div className="mt-6 rounded-xl border border-red-900/60 bg-red-950/20 p-4 text-sm text-red-300">
+          Live scan unavailable: {scan.error}
+          <span className="block pt-1 text-xs text-red-300/70">
+            The demo address still works offline — every data source Steward uses
+            is keyless public infrastructure, and sometimes it has a bad minute.
           </span>
         </div>
+      )}
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-medium text-neutral-300">
+            Approvals for {shortAddress(scan.address)}
+            {scan.status === "demo" && (
+              <span className="ml-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+                demo data
+              </span>
+            )}
+            {scan.status === "live" && (
+              <span className="ml-2 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-300">
+                live · {scan.chain}
+              </span>
+            )}
+          </h2>
+          <span className="text-xs text-neutral-500">
+            {scan.totalCount ?? scan.approvals.length} live
+            {(scan.totalCount ?? 0) > scan.approvals.length
+              ? ` · showing worst ${scan.approvals.length}`
+              : ""}
+            {" · "}worst score {worst}
+          </span>
+        </div>
+        {scan.coverage && (
+          <p className="mb-3 text-xs text-neutral-600">
+            Coverage: {scan.coverage}. Every allowance shown was verified live
+            on-chain — approval events alone are forgeable.
+          </p>
+        )}
         <div className="space-y-3">
-          {[...approvals]
-            .sort((a, b) => b.risk.score - a.risk.score)
-            .map((a) => (
-              <ApprovalCard
-                key={a.id}
-                approval={a}
-                staged={staged.some((s) => s.approvalId === a.id)}
-                onStage={() => stageRevoke(a)}
-              />
-            ))}
+          {scan.status === "loading" ? (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-8 text-center text-sm text-neutral-500">
+              Scanning approval history and verifying live allowances on-chain…
+            </div>
+          ) : (
+            [...scan.approvals]
+              .sort((a, b) => b.risk.score - a.risk.score)
+              .map((a) => (
+                <ApprovalCard
+                  key={a.id}
+                  approval={a}
+                  staged={staged.some((s) => s.approvalId === a.id)}
+                  onStage={() => stageRevoke(a)}
+                />
+              ))
+          )}
         </div>
       </section>
 
       {staged.length > 0 && (
         <section className="mt-10">
           <h2 className="mb-3 text-sm font-medium text-neutral-300">
-            Review queue — {staged.length} staged, none signed
+            Review queue — {staged.length} staged, awaiting your signature
           </h2>
           <div className="space-y-3">
             {staged.map((s) => (
@@ -281,8 +444,10 @@ export function StewardApp() {
       )}
 
       <footer className="mt-16 border-t border-neutral-900 pt-6 text-xs leading-relaxed text-neutral-600">
-        Steward never holds keys and never sends a transaction. Token names are
-        attacker-controlled and are quarantined before any agent sees them.
+        Steward never holds keys and never sends a transaction on its own. Token
+        names are attacker-controlled and are quarantined before any agent sees
+        them. The demo address is a deterministic fixture (including its planted
+        hostile token); every other address is scanned live on-chain.
       </footer>
     </div>
   );

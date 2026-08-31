@@ -110,3 +110,39 @@ describe("benign approvals stay quiet", () => {
     expect(benign.risk.metadataFlags).toEqual([]);
   });
 });
+
+describe("resolveApprovalId", () => {
+  // Local import to keep the top of the file unchanged.
+  const { resolveApprovalId, shortApprovalId } = require("./format");
+
+  const live: AssessedApproval[] = [
+    {
+      ...assessed[0],
+      id: "ethereum:0x69627b7e0d9e74690c7489d5b829968dc15bdcde:0x5c14cee5849e3959bfc5b506f9ca1b7089aeea2f",
+      chain: "ethereum",
+      token: { ...assessed[0].token, address: "0x69627b7e0d9e74690c7489d5b829968dc15bdcde" },
+      spender: { ...assessed[0].spender, address: "0x5c14cee5849e3959bfc5b506f9ca1b7089aeea2f" },
+    },
+  ];
+
+  test("resolves the exact full id", () => {
+    expect(resolveApprovalId(live[0].id, live)).toBe(live[0]);
+  });
+
+  test("resolves the short form scan_approvals prints", () => {
+    const short = shortApprovalId(live[0]);
+    expect(short).toContain("…");
+    expect(resolveApprovalId(short, live)).toBe(live[0]);
+  });
+
+  test("resolves an ASCII-ellipsis variant an agent might retype", () => {
+    expect(
+      resolveApprovalId("ethereum:0x6962...dcde:0x5c14...ea2f", live),
+    ).toBe(live[0]);
+  });
+
+  test("returns undefined for junk and for the wrong chain", () => {
+    expect(resolveApprovalId("nonsense", live)).toBeUndefined();
+    expect(resolveApprovalId("base:0x6962…dcde:0x5c14…ea2f", live)).toBeUndefined();
+  });
+});

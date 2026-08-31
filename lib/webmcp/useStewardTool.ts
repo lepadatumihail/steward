@@ -73,18 +73,31 @@ function toEnvelope(raw: LooseToolResult): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(raw, null, 2) }] };
 }
 
-/** Enforce the output budget on the assembled envelope. */
+/**
+ * Enforce the output budget across the WHOLE envelope, not per part — the
+ * ~1.5K guideline is for the tool's total output, and the quarantine notice
+ * counts against it. Later parts absorb the trim first; a trimmed part says so.
+ */
 function enforceBudget(result: ToolResult): ToolResult {
-  const content = result.content.map((part) => {
-    if (part.type !== "text" || part.text.length <= MAX_TOOL_OUTPUT) return part;
-    const keep = MAX_TOOL_OUTPUT - 64;
-    return {
+  const total = result.content.reduce(
+    (n, part) => n + (part.type === "text" ? part.text.length : 0),
+    0,
+  );
+  if (total <= MAX_TOOL_OUTPUT) return result;
+
+  let excess = total - MAX_TOOL_OUTPUT + 64; // room for the trim marker
+  const content = [...result.content];
+  for (let i = content.length - 1; i >= 0 && excess > 0; i--) {
+    const part = content[i];
+    if (part.type !== "text") continue;
+    const cut = Math.min(excess, part.text.length);
+    const kept = part.text.slice(0, part.text.length - cut).trimEnd();
+    excess -= cut;
+    content[i] = {
       ...part,
-      text:
-        part.text.slice(0, keep) +
-        `\n[truncated ${part.text.length - keep} chars to stay within the tool-output budget]`,
+      text: kept + `\n[trimmed ${cut} chars to fit the tool-output budget]`,
     };
-  });
+  }
   return { ...result, content };
 }
 
