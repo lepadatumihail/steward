@@ -17,11 +17,16 @@
  * chrome://flags/#enable-webmcp-testing, which is the environment the challenge
  * rules say judges use.
  *
- * Result on 2026-09-01, Chrome 151/152:
+ * Result on 2026-09-01, Chrome 151/152 (re-run after the six-tool build):
  *   constructor "ModelContext", isStewardShim false
- *   3/3 tools registered with annotations and schemas intact
- *   executeTool(handle, '{}') -> 1170 chars, quarantine notice present, 9 fences
+ *   6/6 tools registered with annotations and schemas intact
+ *   executeTool(handle, '{}') -> 1227 chars, quarantine notice present, 9 fences
  *   executeTool(handle, {})   -> "Failed to parse input arguments"
+ *
+ * Operational note, learned the hard way: `next start` re-execs as
+ * `next-server`, so `pkill -f "next start"` does NOT kill it. A zombie server
+ * from an old build will silently win the port and serve stale bundles to
+ * this harness. Kill by PID from `lsof -iTCP:<port>`."
  *
  * That last line is a live spec/implementation skew: the spec moved to object
  * arguments on 2026-08-17, shipping Chrome still wants a JSON string. It does
