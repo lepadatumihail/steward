@@ -41,8 +41,12 @@ no wallet extension gets the full audit experience on any pasted address.
 
 An agent can now *safely operate on a live wallet* — audit it, research a
 token's exit safety across three data sources, and prepare the transactions —
-something that until now required either handing over keys (catastrophic) or
-doing nothing. The split:
+with **zero delegated authority**. The industry's current answer to
+agents-with-money is delegation: session keys, agent wallets, spending caps
+(ERC-7715, agentic wallet platforms) — and trusting the policy to hold against
+prompt injection, which security literature still treats as unsolved: within
+its budget, a steered agent complies. Steward's split needs no delegation at
+all: no keys, no session key, no policy to author, no server enclave. The split:
 the agent does the research across thousands of on-chain events; the page
 ground-truths every claim (live `allowance()` reads — approval events are
 forgeable); the human spends their attention only on the final, cryptographic

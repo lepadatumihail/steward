@@ -23,8 +23,10 @@ to Steward's landing view.*
 > "Your wallet remembers every contract you've ever approved — and so do the
 > attackers. Old, unlimited token approvals are one of the quietest ways
 > wallets get drained, and almost nobody audits them, because it's tedious,
-> technical work. That's exactly the kind of work you'd want to hand to an
-> agent. But you can't give an agent your keys — and you never should."
+> technical work. That's exactly the kind of work you'd hand to an agent.
+> The industry's answer is delegation — session keys, agent wallets, spending
+> caps — and trusting the policy to hold when the agent gets prompt-injected.
+> Steward's answer is stricter: give the agent no signing power at all."
 
 ## Beat 2 — Agent audit, watch-only (0:25–1:10)
 
@@ -81,10 +83,12 @@ MetaMask popup renders. Confirm. Tx hash appears, click through to Basescan.*
 *Screen: pull back to the full app; WebMCP panel showing the session's tool
 calls tally.*
 
-> "A server-side MCP could read this data, but it could never finish the job —
-> keys live in the browser, so agent-and-wallet collaboration has to happen
-> page-side. That's WebMCP: the agent investigates, the page verifies, and the
-> human stays the only one holding a pen. That's Steward."
+> "Agent wallets solve this with delegated budgets held on servers. Steward
+> needs no delegation at all — and that's only possible page-side, where your
+> real wallet lives. That's WebMCP: the agent investigates, the page verifies,
+> and the human stays the only one holding a pen. Same consent architecture,
+> next verbs: swaps and rebalancing — quoted by the agent, signed by you.
+> That's Steward."
 
 *End card: URL + repo, 3 seconds.*
 
