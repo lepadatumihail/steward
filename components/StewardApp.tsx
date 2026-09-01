@@ -20,6 +20,7 @@ import {
   type ModelContextMode,
 } from "@/lib/webmcp/shim";
 import { quarantine, sanitizeUntrusted } from "@/lib/webmcp/quarantine";
+import { swapGate } from "@/lib/steward/swap-gate";
 import { DEMO_ADDRESS, DEMO_APPROVALS } from "@/lib/steward/fixtures";
 import { assessApproval } from "@/lib/steward/risk";
 import {
@@ -98,6 +99,9 @@ export function StewardApp() {
   useEffect(() => setContextMode(getModelContextMode()), []);
 
   const connection = useConnection();
+  // Tools close over the connected address through a ref, same reason as scanRef.
+  const addressRef = useRef<string | undefined>(undefined);
+  addressRef.current = connection.address;
   const { connectors, connect, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
 
@@ -458,6 +462,150 @@ export function StewardApp() {
     },
   });
 
+  const swapTool = useStewardTool<{
+    token_in: string;
+    token_out: string;
+    amount: string;
+    chain?: string;
+    acknowledge_risk?: boolean;
+  }>({
+    name: "stage_swap",
+    description:
+      'Quote a token swap via the KyberSwap aggregator and stage it for the user to sign. Does NOT trade: the user must sign in their own wallet. The output token is risk-checked automatically; a high-risk token is refused unless the user has been told and acknowledge_risk is true. token_in/token_out are contract addresses or "ETH".',
+    inputSchema: {
+      type: "object",
+      properties: {
+        token_in: { type: "string", description: '"ETH" or the 0x… token to sell.' },
+        token_out: { type: "string", description: '"ETH" or the 0x… token to buy.' },
+        amount: { type: "string", description: 'Amount of token_in in human units, e.g. "0.001".' },
+        chain: { type: "string", description: '"Base" (default) or "Ethereum".' },
+        acknowledge_risk: {
+          type: "boolean",
+          description: "Set true ONLY after telling the user the token was rated high-risk and they still want it staged.",
+        },
+      },
+      required: ["token_in", "token_out", "amount"],
+    },
+    // Stages state; echoes token symbols; both write-path and untrusted.
+    annotations: { readOnlyHint: false, untrustedContentHint: true },
+    execute: async ({ token_in, token_out, amount, chain: chainArg, acknowledge_risk }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "ethereum" ? "ethereum" : "base";
+      const sender = addressRef.current;
+
+      const params = new URLSearchParams({
+        chain: targetChain,
+        tokenIn: token_in.trim(),
+        tokenOut: token_out.trim(),
+        amount: amount.trim(),
+      });
+      if (sender) params.set("sender", sender);
+      const res = await fetch(`/api/swap-quote?${params}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { error?: string } | null)?.error ?? `quote failed (${res.status})`,
+        );
+      }
+      const quote = (await res.json()) as {
+        tokenIn: { address: string; symbol: string; decimals: number };
+        tokenOut: { address: string; symbol: string; decimals: number };
+        amountIn: string;
+        amountOut: string;
+        minReceived: string;
+        amountOutUsd: number | null;
+        gasUsd: number | null;
+        intel: { verdict: string; signals: string[] } | null;
+        tx: {
+          needsApproval: boolean;
+          approve?: { to: string; data: string };
+          swap: { to: string; data: string; valueWei: string };
+        } | null;
+      };
+
+      const inSym = sanitizeUntrusted(quote.tokenIn.symbol, 12).safe;
+      const outSym = sanitizeUntrusted(quote.tokenOut.symbol, 12).safe;
+      const fmt = (raw: string, d: number) => {
+        try {
+          const n = Number(raw) / 10 ** d;
+          return n < 0.0001 ? "<0.0001" : n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+        } catch {
+          return "?";
+        }
+      };
+      const gasText =
+        quote.gasUsd == null
+          ? ""
+          : quote.gasUsd < 0.01
+            ? ", <$0.01 gas"
+            : `, ~$${quote.gasUsd.toFixed(2)} gas`;
+      const quoteLine =
+        `${fmt(quote.amountIn, quote.tokenIn.decimals)} ${inSym} -> ` +
+        `${fmt(quote.amountOut, quote.tokenOut.decimals)} ${outSym}` +
+        ` (min ${fmt(quote.minReceived, quote.tokenOut.decimals)} after 0.5% slippage${gasText})`;
+
+      // The page's gate, not the agent's manners: high-risk needs an explicit,
+      // user-informed acknowledgement before anything is staged. Pure function,
+      // unit-tested in lib/steward/swap-gate.test.ts.
+      const gate = swapGate({
+        verdict: quote.intel?.verdict as never ?? null,
+        acknowledged: acknowledge_risk === true,
+        signals: quote.intel?.signals ?? [],
+        tokenSymbolSafe: outSym,
+      });
+      if (!gate.allowed) throw new Error(gate.refusal);
+
+      if (!sender || !quote.tx) {
+        return (
+          `Quote only — no wallet connected, nothing staged.\n${quoteLine}\n` +
+          (gate.warning ? `${gate.warning}\n` : "") +
+          (quote.intel ? `Token check: ${quote.intel.verdict}.\n` : "") +
+          `Connect a wallet in Steward (top right) and call stage_swap again to stage it for signing.`
+        );
+      }
+
+      const stamp = Date.now();
+      const actions: StagedAction[] = [];
+      if (quote.tx.needsApproval && quote.tx.approve) {
+        actions.push({
+          id: `approve-${quote.tokenIn.address}-${stamp}`,
+          kind: "approve",
+          chain: targetChain,
+          to: quote.tx.approve.to,
+          data: quote.tx.approve.data,
+          summary: `Step 1 of 2: allow KyberSwap router to spend EXACTLY ${fmt(quote.amountIn, quote.tokenIn.decimals)} ${inSym} (not unlimited)`,
+          meta: ["Sign this before the swap. Exact-amount allowance only."],
+          createdAt: new Date().toISOString(),
+        });
+      }
+      actions.push({
+        id: `swap-${quote.tokenIn.address}-${quote.tokenOut.address}-${stamp}`,
+        kind: "swap",
+        chain: targetChain,
+        to: quote.tx.swap.to,
+        data: quote.tx.swap.data,
+        ...(quote.tx.swap.valueWei !== "0" ? { valueWei: quote.tx.swap.valueWei } : {}),
+        summary: `${quote.tx.needsApproval ? "Step 2 of 2: swap" : "Swap"} ${fmt(quote.amountIn, quote.tokenIn.decimals)} ${inSym} -> ${outSym} via KyberSwap`,
+        meta: [
+          `Minimum received: ${fmt(quote.minReceived, quote.tokenOut.decimals)} ${outSym} (0.5% slippage cap)`,
+          ...(quote.intel ? [`Token check: ${quote.intel.verdict}`] : []),
+          "Router pinned to KyberSwap MetaAggregationRouterV2",
+        ],
+        createdAt: new Date().toISOString(),
+      });
+      setStaged((prev) => [...prev, ...actions]);
+
+      return (
+        `awaiting_user_confirmation\n${quoteLine}\n` +
+        (gate.warning ? `${gate.warning}\n` : "") +
+        (quote.intel ? `Token check: ${quote.intel.verdict}.\n` : "") +
+        `Staged ${actions.length === 2 ? "an exact-amount approval plus the swap" : "the swap"} in Steward's review queue. ` +
+        `The user must sign in their wallet${actions.length === 2 ? ", approval first" : ""}. ` +
+        `You cannot execute this, and neither can this page.`
+      );
+    },
+  });
+
   const gasTool = useStewardTool<{ chain?: string }>({
     name: "check_gas",
     description:
@@ -500,6 +648,7 @@ export function StewardApp() {
     { label: "check_gas", state: gasTool },
     { label: "stage_revoke", state: revokeTool },
     { label: "stage_transfer", state: transferTool },
+    { label: "stage_swap", state: swapTool },
   ];
 
   const worst = scan.approvals.reduce(

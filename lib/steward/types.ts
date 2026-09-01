@@ -56,7 +56,7 @@ export interface AssessedApproval extends Approval {
 /** A write the agent has prepared but cannot perform. */
 export interface StagedAction {
   id: string;
-  kind: "revoke" | "transfer";
+  kind: "revoke" | "transfer" | "approve" | "swap";
   chain: ChainId;
   /** The address the user's wallet will be asked to transact with. */
   to: string;
@@ -66,6 +66,8 @@ export interface StagedAction {
   valueWei?: string;
   /** Plain-language description shown in Steward's own confirmation UI. */
   summary: string;
+  /** Extra facts worth showing on the card (min received, risk verdict…). */
+  meta?: string[];
   /** Present when the action targets a scanned approval. */
   approvalId?: string;
   createdAt: string;

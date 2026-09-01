@@ -49,6 +49,11 @@ export function StagedActionCard({
               ? `Calls ${shortAddress(action.to)} on ${action.chain}`
               : `Sends native ETH to ${shortAddress(action.to)} on ${action.chain}`}
           </p>
+          {action.meta?.map((line) => (
+            <p key={line} className="mt-0.5 text-xs text-neutral-600">
+              · {line}
+            </p>
+          ))}
 
           {txHash ? (
             <p className="mt-2 text-xs">
