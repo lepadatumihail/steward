@@ -32,8 +32,9 @@ agent calls `scan_approvals` (any address or ENS name, no wallet needed), walks
 the worst risks with `explain_approval` — every score itemised, never a black
 box — vets a suspect token with `assess_token` (three independent keyless
 sources: contract security, market liquidity, sell-simulation), checks
-`check_gas` for a cheap moment, and stages revocations or exit transfers into
-a review queue. The human reviews plain-language summaries plus exact
+`check_gas` for a cheap moment, and stages revocations, transfers, or full
+KyberSwap-quoted swaps into a review queue — where a high-risk output token is
+refused by the page itself until the user has been told why. The human reviews plain-language summaries plus exact
 calldata, and signs only what they accept. Watch-only mode means a judge with
 no wallet extension gets the full audit experience on any pasted address.
 
@@ -57,7 +58,7 @@ is a prompt-injection attack, caught and neutralised live.
 
 ## Briefly explain how you implemented WebMCP
 
-Six tools registered with `document.modelContext.registerTool()` through a
+Seven tools registered with `document.modelContext.registerTool()` through a
 hand-rolled React hook (`useStewardTool`, prior art: GoogleChromeLabs'
 `use-webmcp-tool`). The hook centrally enforces what tools must not be able to
 forget: the canonical MCP result envelope, the ~1.5K-char output budget
@@ -86,11 +87,11 @@ that never claims an agent is present. Verified against native Chrome
 2. Open https://steward-zeta-ashen.vercel.app — the status panel shows
    "WebMCP connected", and DevTools → Application → WebMCP lists all six
    tools (`scan_approvals`, `explain_approval`, `assess_token`, `check_gas`,
-   `stage_revoke`, `stage_transfer`) with manual Run tool.
+   `stage_revoke`, `stage_transfer`, `stage_swap`) with manual Run tool.
 3. No wallet needed for the audit: try `vitalik.eth` (live on-chain scan,
    ~2,200 verified approvals) or keep the demo address — a deterministic
    fixture whose planted hostile token demonstrates the injection quarantine.
 4. With any injected wallet, staged revokes gain a live "Sign in wallet"
    button (chain-guarded; the shown calldata is exactly what you sign).
-5. `bun test` runs the 39-test suite; `scripts/verify-native-webmcp.ts`
+5. `bun test` runs the 45-test suite; `scripts/verify-native-webmcp.ts`
    re-proves native registration end-to-end.

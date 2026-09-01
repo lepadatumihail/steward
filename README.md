@@ -52,6 +52,7 @@ Registered with the browser's native model context —
 | `check_gas` | `readOnlyHint` | Current fees with a verdict honest about its window (cheap/typical/elevated vs the last few minutes) |
 | `stage_revoke` | `untrustedContentHint` | Prepares a revocation in the review queue; **cannot execute it** |
 | `stage_transfer` | `untrustedContentHint` | Prepares a token or ETH transfer (ENS recipients resolve); same review queue, same rule: **only your wallet executes** |
+| `stage_swap` | `untrustedContentHint` | Quotes a swap via KyberSwap (router pinned, never trusted from the API) and stages it. Output token is auto risk-checked; **high-risk is refused** unless the user acknowledged the findings. ERC-20 inputs get an **exact-amount** approval staged first — never unlimited |
 
 The hook centrally enforces what individual tools must not be able to forget:
 the canonical MCP result envelope, the ~1.5K-char output budget (measured
@@ -128,7 +129,7 @@ bun run scripts/verify-native-webmcp.ts   # prove native registration via CDP
 ```
 
 The native harness drives flagged Chrome over CDP and asserts the real
-`ModelContext` (not the shim) holds all six tools and executes them —
+`ModelContext` (not the shim) holds all seven tools and executes them —
 verified 2026-09-01 on Chrome 151/152. One skew worth knowing: shipping
 Chrome's `executeTool` takes the `RegisteredTool` handle plus a **JSON
 string** of arguments; the object form the spec adopted in Aug 2026 isn't in
