@@ -26,9 +26,11 @@ import { assessApproval } from "@/lib/steward/risk";
 import {
   formatApprovalDetail,
   formatApprovalsForAgent,
+  formatDiscovered,
   formatTokenIntel,
   resolveApprovalId,
   shortAddress,
+  type DiscoveredRow,
 } from "@/lib/steward/format";
 import type {
   AssessedApproval,
@@ -641,9 +643,41 @@ export function StewardApp() {
     },
   });
 
+  const discoverTool = useStewardTool<{ chain?: string; limit?: number }>({
+    name: "discover_tokens",
+    description:
+      "List the top tokens by 24h trading volume on a chain (floors: >$250k liquidity, >$250k volume, >1,000 holders). Live market data. These are market facts, NOT endorsements: vet any candidate with assess_token before proposing it to the user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain: { type: "string", description: '"Base" (default) or "Ethereum".' },
+        limit: { type: "number", description: "How many rows, 1-10. Default 8." },
+      },
+    },
+    // Read-only; token names/symbols are attacker-controlled text.
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: async ({ chain: chainArg, limit }) => {
+      const targetChain: ChainId =
+        chainArg?.toLowerCase() === "ethereum" ? "ethereum" : "base";
+      const params = new URLSearchParams({ chain: targetChain });
+      if (limit) params.set("limit", String(Math.min(Math.max(limit, 1), 10)));
+      const res = await fetch(`/api/discover?${params}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { error?: string } | null)?.error ??
+            `discovery failed (${res.status})`,
+        );
+      }
+      const body = (await res.json()) as { chain: string; tokens: DiscoveredRow[] };
+      return formatDiscovered(body.chain, body.tokens);
+    },
+  });
+
   const tools = [
     { label: "scan_approvals", state: scanTool },
     { label: "explain_approval", state: explainTool },
+    { label: "discover_tokens", state: discoverTool },
     { label: "assess_token", state: assessTool },
     { label: "check_gas", state: gasTool },
     { label: "stage_revoke", state: revokeTool },

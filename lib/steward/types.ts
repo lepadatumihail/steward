@@ -89,5 +89,7 @@ export interface TokenIntel {
   /** Human-readable risk signals, worst first. */
   signals: string[];
   verdict: "high-risk" | "caution" | "no-major-flags" | "insufficient-data";
+  /** Best-effort price trend (Codex); absent when the keyed source is down. */
+  trend?: { change7dPct: number | null; change30dPct: number | null };
   checkedAt: string;
 }

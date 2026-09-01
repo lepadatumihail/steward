@@ -28,7 +28,8 @@ the wallet's confirm button is the entire product.
 Approval hygiene is tedious, high-stakes work people simply don't do: dig
 through explorer logs, decode allowances, judge unknown spender contracts.
 With Steward, "is my wallet safe?" becomes one conversation with an agent. The
-agent calls `scan_approvals` (any address or ENS name, no wallet needed), walks
+agent asks `discover_tokens` what's moving on the market, calls
+`scan_approvals` (any address or ENS name, no wallet needed), walks
 the worst risks with `explain_approval` — every score itemised, never a black
 box — vets a suspect token with `assess_token` (three independent keyless
 sources: contract security, market liquidity, sell-simulation), checks
@@ -58,7 +59,7 @@ is a prompt-injection attack, caught and neutralised live.
 
 ## Briefly explain how you implemented WebMCP
 
-Seven tools registered with `document.modelContext.registerTool()` through a
+Eight tools registered with `document.modelContext.registerTool()` through a
 hand-rolled React hook (`useStewardTool`, prior art: GoogleChromeLabs'
 `use-webmcp-tool`). The hook centrally enforces what tools must not be able to
 forget: the canonical MCP result envelope, the ~1.5K-char output budget
@@ -86,8 +87,9 @@ that never claims an agent is present. Verified against native Chrome
 1. Chrome 149+: enable `chrome://flags/#enable-webmcp-testing`, restart.
 2. Open https://steward-zeta-ashen.vercel.app — the status panel shows
    "WebMCP connected", and DevTools → Application → WebMCP lists all six
-   tools (`scan_approvals`, `explain_approval`, `assess_token`, `check_gas`,
-   `stage_revoke`, `stage_transfer`, `stage_swap`) with manual Run tool.
+   tools (`scan_approvals`, `explain_approval`, `discover_tokens`,
+   `assess_token`, `check_gas`, `stage_revoke`, `stage_transfer`,
+   `stage_swap`) with manual Run tool.
 3. No wallet needed for the audit: try `vitalik.eth` (live on-chain scan,
    ~2,200 verified approvals) or keep the demo address — a deterministic
    fixture whose planted hostile token demonstrates the injection quarantine.

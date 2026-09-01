@@ -171,6 +171,13 @@ export function formatTokenIntel(intel: TokenIntel): string {
       `Market: ${m.priceUsd ? `$${m.priceUsd}` : "price n/a"}; deepest pool $${m.liquidityUsd == null ? "n/a" : Math.round(m.liquidityUsd).toLocaleString("en-US")}; 24h volume $${m.volume24hUsd == null ? "n/a" : Math.round(m.volume24hUsd).toLocaleString("en-US")}${m.priceChange24hPct == null ? "" : `; 24h ${m.priceChange24hPct > 0 ? "+" : ""}${m.priceChange24hPct}%`}`,
     );
   }
+  if (intel.trend) {
+    const t = intel.trend;
+    const leg = (v: number | null, label: string) =>
+      v == null ? null : `${label} ${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+    const legs = [leg(t.change7dPct, "7d"), leg(t.change30dPct, "30d")].filter(Boolean);
+    if (legs.length) lines.push(`Trend: ${legs.join(", ")}`);
+  }
   if (intel.signals.length > 0) {
     lines.push("Signals:");
     for (const sig of intel.signals.slice(0, 8)) lines.push(`  - ${sig}`);
@@ -179,4 +186,42 @@ export function formatTokenIntel(intel: TokenIntel): string {
   }
   lines.push(`Sources: ${sources}. These are security signals, not financial advice.`);
   return lines.join("\n");
+}
+
+export interface DiscoveredRow {
+  address: string;
+  name: string;
+  symbol: string;
+  priceUsd: number | null;
+  volume24Usd: number;
+  liquidityUsd: number;
+  change24Pct: number | null;
+  holders: number | null;
+}
+
+/**
+ * Agent-facing discovery list. Market facts, not endorsements — the header
+ * says so and routes the agent into assess_token, and stage_swap's page gate
+ * backstops an agent that skips the advice.
+ */
+export function formatDiscovered(chain: string, rows: DiscoveredRow[]): string {
+  if (rows.length === 0) {
+    return `No tokens on ${chain} currently clear the discovery floors (liquidity > $250k, volume > $250k, holders > 1,000).`;
+  }
+  const money = (n: number) =>
+    n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${(n / 1_000).toFixed(0)}K`;
+  const lines = rows.map((r) => {
+    const sym = quarantine("token.symbol", r.symbol, 20).text;
+    const chg =
+      r.change24Pct == null
+        ? ""
+        : ` ${r.change24Pct > 0 ? "+" : ""}${r.change24Pct.toFixed(1)}%/24h`;
+    return `- ${sym} $${r.priceUsd ?? "?"}${chg}; vol ${money(r.volume24Usd)}; liq ${money(r.liquidityUsd)}; holders ${r.holders?.toLocaleString("en-US") ?? "?"}; addr=${r.address}`;
+  });
+  return (
+    `Top ${rows.length} ${chain} tokens by 24h volume (floors: liq>$250K, vol>$250K, holders>1K). ` +
+    `MARKET FACTS, NOT ENDORSEMENTS — run assess_token on any candidate before proposing it; ` +
+    `stage_swap refuses high-risk tokens regardless.\n` +
+    lines.join("\n")
+  );
 }

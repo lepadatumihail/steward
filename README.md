@@ -48,6 +48,7 @@ Registered with the browser's native model context —
 |---|---|---|
 | `scan_approvals` | `readOnlyHint`, `untrustedContentHint` | Live-audits any 0x address or ENS name; worst risks first |
 | `explain_approval` | `readOnlyHint`, `untrustedContentHint` | Full detail and every reason behind one approval's score |
+| `discover_tokens` | `readOnlyHint`, `untrustedContentHint` | Top tokens by live 24h volume (Codex; floors on liquidity/volume/holders). Market facts, not endorsements — the output routes the agent into `assess_token` |
 | `assess_token` | `readOnlyHint`, `untrustedContentHint` | Cross-source token risk: GoPlus contract security, DexScreener liquidity, Honeypot.is sell-simulation. Two sources minimum or the verdict is `insufficient-data` |
 | `check_gas` | `readOnlyHint` | Current fees with a verdict honest about its window (cheap/typical/elevated vs the last few minutes) |
 | `stage_revoke` | `untrustedContentHint` | Prepares a revocation in the review queue; **cannot execute it** |
@@ -129,7 +130,7 @@ bun run scripts/verify-native-webmcp.ts   # prove native registration via CDP
 ```
 
 The native harness drives flagged Chrome over CDP and asserts the real
-`ModelContext` (not the shim) holds all seven tools and executes them —
+`ModelContext` (not the shim) holds all eight tools and executes them —
 verified 2026-09-01 on Chrome 151/152. One skew worth knowing: shipping
 Chrome's `executeTool` takes the `RegisteredTool` handle plus a **JSON
 string** of arguments; the object form the spec adopted in Aug 2026 isn't in

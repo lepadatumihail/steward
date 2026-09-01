@@ -30,12 +30,12 @@ to Steward's landing view.*
 
 ## Beat 2 — Agent audit, watch-only (0:25–1:10)
 
-*Screen: Steward open; WebMCP panel shows 7 tools registered. Agent (or
+*Screen: Steward open; WebMCP panel shows 8 tools registered. Agent (or
 DevTools Run-tool) calls `scan_approvals` with vitalik.eth. Dashboard flips to
 LIVE, worst approvals ranked. Expand "Why this score".*
 
 > "Steward is a wallet copilot with a safety core that speaks WebMCP — it
-> registers seven tools with the browser's native model context, so any agent in your browser
+> registers eight tools with the browser's native model context, so any agent in your browser
 > can drive it. Ask it to audit any address — no wallet connected, live
 > on-chain data. Twenty-two hundred live approvals, every allowance verified
 > on-chain — because approval events can be forged, Steward never trusts an
@@ -62,7 +62,8 @@ name in the tool result.*
 slides in with verdict + liquidity. Then `stage_swap` ETH→USDC: quote card
 lands in the review queue with min-received and the pinned router.*
 
-> "And it's more than an auditor. Ask whether a token is safe to exit — three
+> "And it's more than an auditor. Ask what's moving on Base — live, screened
+> market data. Ask whether a token is safe to exit — three
 > independent sources: contract security, real liquidity, a sell simulation.
 > Ask it to swap — it quotes the trade through an aggregator and stages it,
 > exact numbers, slippage capped. And if I ask it to buy something Steward

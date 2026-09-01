@@ -18,6 +18,7 @@
  */
 
 import { erc20Abi } from "viem";
+import { tokenTrend } from "./codex";
 import { sanitizeUntrusted } from "../webmcp/quarantine";
 import type { ChainId, TokenIntel } from "../steward/types";
 import { clientFor } from "./chains";
@@ -45,7 +46,7 @@ export async function assessToken(
   const addr = address.toLowerCase();
   const client = clientFor(chain);
 
-  const [metaR, goplusR, dexR, honeyR] = await Promise.allSettled([
+  const [metaR, goplusR, dexR, honeyR, trendR] = await Promise.allSettled([
     client.multicall({
       contracts: [
         { address: addr as `0x${string}`, abi: erc20Abi, functionName: "name" },
@@ -61,6 +62,9 @@ export async function assessToken(
     getJson(
       `https://api.honeypot.is/v2/IsHoneypot?address=${addr}&chainID=${HONEYPOT_CHAIN[chain]}`,
     ),
+    // Best-effort enrichment from the one keyed source; never load-bearing
+    // and deliberately NOT counted toward the two-source verdict rule.
+    tokenTrend(addr, chain),
   ]);
 
   // ---- on-chain identity ----------------------------------------------------
@@ -226,6 +230,12 @@ export async function assessToken(
     );
   }
 
+  const trend =
+    trendR.status === "fulfilled" &&
+    (trendR.value.change7dPct != null || trendR.value.change30dPct != null)
+      ? trendR.value
+      : undefined;
+
   const intel: TokenIntel = {
     address: addr,
     chain,
@@ -234,6 +244,7 @@ export async function assessToken(
     market,
     signals,
     verdict,
+    ...(trend ? { trend } : {}),
     checkedAt: new Date().toISOString(),
   };
   cache.set(key, { at: Date.now(), intel });
