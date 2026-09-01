@@ -170,7 +170,13 @@ export async function assessToken(
     } else {
       const best = pairs
         .map((p) => ({
-          priceUsd: (p.priceUsd as string) ?? null,
+          // Coerced to a number, never carried as a raw API string: a number
+          // cannot smuggle an instruction into agent output the way the
+          // fenced-but-stringly name/symbol fields could.
+          priceUsd: (() => {
+            const n = parseFloat(String(p.priceUsd ?? ""));
+            return Number.isFinite(n) ? n : null;
+          })(),
           liquidityUsd:
             ((p.liquidity as Record<string, number> | undefined)?.usd as number) ??
             0,

@@ -48,11 +48,18 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const result = await scanAddress(address, chain);
+    // The edge must never outlive the server's freshness window, or a wallet
+    // that just revoked on camera reads stale from the CDN no matter what the
+    // in-process TTL says. Big wallets (slow, rarely changing mid-demo) keep a
+    // real edge cache; everything else is revalidated.
+    const cacheControl =
+      result.meta.liveNonzero > 25
+        ? "public, s-maxage=120, stale-while-revalidate=600"
+        : "public, s-maxage=15, must-revalidate";
     return new Response(JSON.stringify({ address, ...result }), {
       headers: {
         "content-type": "application/json",
-        // CDN-cacheable: repeat judge clicks and agent calls hit the edge.
-        "cache-control": "public, s-maxage=120, stale-while-revalidate=600",
+        "cache-control": cacheControl,
       },
     });
   } catch (cause) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { sanitizeUntrusted } from "@/lib/webmcp/quarantine";
-import { shortAddress } from "@/lib/steward/format";
+import { formatPriceUsd, shortAddress } from "@/lib/steward/format";
 import type { TokenIntel } from "@/lib/steward/types";
 
 const VERDICT_STYLES: Record<TokenIntel["verdict"], { badge: string; label: string }> = {
@@ -68,7 +68,9 @@ export function TokenIntelCard({
 
       {intel.market && (
         <p className="mt-2 text-xs text-neutral-600">
-          {intel.market.priceUsd ? `$${intel.market.priceUsd}` : "price n/a"}
+          {intel.market.priceUsd == null
+            ? "price n/a"
+            : `$${formatPriceUsd(intel.market.priceUsd)}`}
           {" · "}deepest pool {money(intel.market.liquidityUsd)}
           {" · "}24h volume {money(intel.market.volume24hUsd)}
           {intel.market.priceChange24hPct != null && (

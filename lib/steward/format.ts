@@ -59,6 +59,22 @@ export function resolveApprovalId(
   return hits.length === 1 ? hits[0] : undefined;
 }
 
+/**
+ * Prices span 12 orders of magnitude in a discovery list. Plain interpolation
+ * renders sub-1e-6 values in scientific notation ("$4.2e-7"), which reads as a
+ * rendering bug to both humans and agents.
+ */
+export function formatPriceUsd(n: number): string {
+  if (!Number.isFinite(n)) return "?";
+  if (n === 0) return "0";
+  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  const fixed = n.toFixed(
+    Math.min(18, Math.max(4, Math.ceil(-Math.log10(n)) + 3)),
+  );
+  // Drop trailing zeros: "$0.01000" reads like a bug, "$0.01" reads like a price.
+  return fixed.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+}
+
 export function shortAddress(address: string): string {
   return address.length > 12
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -168,7 +184,7 @@ export function formatTokenIntel(intel: TokenIntel): string {
   if (intel.market) {
     const m = intel.market;
     lines.push(
-      `Market: ${m.priceUsd ? `$${m.priceUsd}` : "price n/a"}; deepest pool $${m.liquidityUsd == null ? "n/a" : Math.round(m.liquidityUsd).toLocaleString("en-US")}; 24h volume $${m.volume24hUsd == null ? "n/a" : Math.round(m.volume24hUsd).toLocaleString("en-US")}${m.priceChange24hPct == null ? "" : `; 24h ${m.priceChange24hPct > 0 ? "+" : ""}${m.priceChange24hPct}%`}`,
+      `Market: ${m.priceUsd == null ? "price n/a" : `$${formatPriceUsd(m.priceUsd)}`}; deepest pool $${m.liquidityUsd == null ? "n/a" : Math.round(m.liquidityUsd).toLocaleString("en-US")}; 24h volume $${m.volume24hUsd == null ? "n/a" : Math.round(m.volume24hUsd).toLocaleString("en-US")}${m.priceChange24hPct == null ? "" : `; 24h ${m.priceChange24hPct > 0 ? "+" : ""}${m.priceChange24hPct}%`}`,
     );
   }
   if (intel.trend) {
@@ -216,7 +232,8 @@ export function formatDiscovered(chain: string, rows: DiscoveredRow[]): string {
       r.change24Pct == null
         ? ""
         : ` ${r.change24Pct > 0 ? "+" : ""}${r.change24Pct.toFixed(1)}%/24h`;
-    return `- ${sym} $${r.priceUsd ?? "?"}${chg}; vol ${money(r.volume24Usd)}; liq ${money(r.liquidityUsd)}; holders ${r.holders?.toLocaleString("en-US") ?? "?"}; addr=${r.address}`;
+    const price = r.priceUsd == null ? "?" : formatPriceUsd(r.priceUsd);
+    return `- ${sym} $${price}${chg}; vol ${money(r.volume24Usd)}; liq ${money(r.liquidityUsd)}; holders ${r.holders?.toLocaleString("en-US") ?? "?"}; addr=${r.address}`;
   });
   return (
     `Top ${rows.length} ${chain} tokens by 24h volume (floors: liq>$250K, vol>$250K, holders>1K). ` +

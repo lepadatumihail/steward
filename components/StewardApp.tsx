@@ -32,11 +32,12 @@ import {
   shortAddress,
   type DiscoveredRow,
 } from "@/lib/steward/format";
-import type {
-  AssessedApproval,
-  ChainId,
-  StagedAction,
-  TokenIntel,
+import {
+  parseChainArg,
+  type AssessedApproval,
+  type ChainId,
+  type StagedAction,
+  type TokenIntel,
 } from "@/lib/steward/types";
 import { ApprovalCard } from "./ApprovalCard";
 import { StagedActionCard } from "./StagedActionCard";
@@ -216,8 +217,7 @@ export function StewardApp() {
     // Read-only, and it carries token names the token itself chose.
     annotations: { readOnlyHint: true, untrustedContentHint: true },
     execute: async ({ address: requested, chain: chainArg }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const target = requested?.trim() || scanRef.current.address;
       if (requested && !looksLikeTarget(target)) {
         throw new Error(
@@ -321,8 +321,7 @@ export function StewardApp() {
     },
     annotations: { readOnlyHint: true, untrustedContentHint: true },
     execute: async ({ token, chain: chainArg }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const addr = token?.trim();
       if (!isAddress(addr)) {
         throw new Error(
@@ -379,8 +378,7 @@ export function StewardApp() {
     // Stages state the user must act on, and echoes a token symbol.
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     execute: async ({ token, amount, to, chain: chainArg }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const chainId = targetChain === "ethereum" ? 1 : 8453;
 
       if (!/^\d+(\.\d+)?$/.test(amount.trim()) || Number(amount) <= 0) {
@@ -491,8 +489,7 @@ export function StewardApp() {
     // Stages state; echoes token symbols; both write-path and untrusted.
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     execute: async ({ token_in, token_out, amount, chain: chainArg, acknowledge_risk }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "ethereum" ? "ethereum" : "base";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const sender = addressRef.current;
 
       const params = new URLSearchParams({
@@ -511,13 +508,18 @@ export function StewardApp() {
       }
       const quote = (await res.json()) as {
         tokenIn: { address: string; symbol: string; decimals: number };
-        tokenOut: { address: string; symbol: string; decimals: number };
+        tokenOut: {
+          address: string;
+          symbol: string;
+          decimals: number;
+          isNative?: boolean;
+        };
         amountIn: string;
         amountOut: string;
         minReceived: string;
         amountOutUsd: number | null;
         gasUsd: number | null;
-        intel: { verdict: string; signals: string[] } | null;
+        intel: { verdict: TokenIntel["verdict"]; signals: string[] } | null;
         tx: {
           needsApproval: boolean;
           approve?: { to: string; data: string };
@@ -550,7 +552,10 @@ export function StewardApp() {
       // user-informed acknowledgement before anything is staged. Pure function,
       // unit-tested in lib/steward/swap-gate.test.ts.
       const gate = swapGate({
-        verdict: quote.intel?.verdict as never ?? null,
+        verdict: quote.intel?.verdict ?? null,
+        // Native ETH output has no token to vet; anything else with a null
+        // verdict means the check FAILED and must be refused, not waved through.
+        nativeOutput: quote.tokenOut.isNative === true,
         acknowledged: acknowledge_risk === true,
         signals: quote.intel?.signals ?? [],
         tokenSymbolSafe: outSym,
@@ -623,8 +628,7 @@ export function StewardApp() {
     },
     annotations: { readOnlyHint: true },
     execute: async ({ chain: chainArg }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "base" ? "base" : "ethereum";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const res = await fetch(`/api/gas?chain=${targetChain}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -657,8 +661,7 @@ export function StewardApp() {
     // Read-only; token names/symbols are attacker-controlled text.
     annotations: { readOnlyHint: true, untrustedContentHint: true },
     execute: async ({ chain: chainArg, limit }) => {
-      const targetChain: ChainId =
-        chainArg?.toLowerCase() === "ethereum" ? "ethereum" : "base";
+      const targetChain: ChainId = parseChainArg(chainArg);
       const params = new URLSearchParams({ chain: targetChain });
       if (limit) params.set("limit", String(Math.min(Math.max(limit, 1), 10)));
       const res = await fetch(`/api/discover?${params}`);

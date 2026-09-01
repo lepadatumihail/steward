@@ -81,7 +81,8 @@ export interface TokenIntel {
   /** Which keyless sources answered; a verdict needs at least two. */
   sources: { goplus: boolean; dexscreener: boolean; honeypot: boolean };
   market: {
-    priceUsd: string | null;
+    /** Number, not the raw API string — see token-intel's coercion note. */
+    priceUsd: number | null;
     liquidityUsd: number | null;
     volume24hUsd: number | null;
     priceChange24hPct: number | null;
@@ -93,3 +94,28 @@ export interface TokenIntel {
   trend?: { change7dPct: number | null; change30dPct: number | null };
   checkedAt: string;
 }
+
+/** Chains Steward supports. Single source of truth for parsing agent input. */
+export const SUPPORTED_CHAINS: readonly ChainId[] = ["ethereum", "base"];
+
+/**
+ * Parse a chain argument from an agent.
+ *
+ * Two rules the hand-rolled ternaries got wrong:
+ *  - ONE default across every tool, so the documented discover -> assess ->
+ *    swap flow cannot silently change chains mid-pipeline;
+ *  - an unrecognised chain THROWS instead of coercing, so "polygon" is an
+ *    error the agent can correct, not an Ethereum transfer it never intended.
+ */
+export function parseChainArg(raw: string | undefined | null): ChainId {
+  if (raw == null || raw.trim() === "") return DEFAULT_CHAIN;
+  const v = raw.trim().toLowerCase();
+  const hit = SUPPORTED_CHAINS.find((c) => c === v);
+  if (hit) return hit;
+  throw new Error(
+    `Unsupported chain "${raw}". Steward supports: ${SUPPORTED_CHAINS.join(", ")}.`,
+  );
+}
+
+/** The one default. Base: cheap gas, where the demo and most staging happens. */
+export const DEFAULT_CHAIN: ChainId = "base";

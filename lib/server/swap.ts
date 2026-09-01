@@ -49,7 +49,13 @@ const HEADERS = {
 export interface SwapQuote {
   chain: ChainId;
   tokenIn: { address: string; symbol: string; decimals: number };
-  tokenOut: { address: string; symbol: string; decimals: number };
+  /** isNative distinguishes "no token to vet" from "the vet failed". */
+  tokenOut: {
+    address: string;
+    symbol: string;
+    decimals: number;
+    isNative: boolean;
+  };
   amountIn: string;
   amountOut: string;
   /** amountOut minus slippage tolerance (0.5%). */
@@ -235,7 +241,7 @@ export async function getSwapQuote(opts: {
   return {
     chain,
     tokenIn: tin,
-    tokenOut: tout,
+    tokenOut: { ...tout, isNative: tout.address === NATIVE },
     amountIn: amountIn.toString(),
     amountOut: amountOut.toString(),
     minReceived: minReceived.toString(),

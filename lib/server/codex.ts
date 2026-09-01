@@ -87,11 +87,13 @@ export async function discoverTokens(
   chain: ChainId,
   limit = 8,
 ): Promise<DiscoveredToken[]> {
-  const key = `${chain}:${limit}`;
+  // Key on the CLAMPED value: limit=11, 12, 5000 all produce the same 10 rows,
+  // so keying on the raw parameter made every one a guaranteed miss — an
+  // attacker-drivable way to burn the one keyed quota and grow this Map.
+  const capped = Math.min(Math.max(Math.trunc(limit) || 8, 1), 10);
+  const key = `${chain}:${capped}`;
   const hit = discoverCache.get(key);
   if (hit && Date.now() - hit.at < DISCOVER_TTL_MS) return hit.rows;
-
-  const capped = Math.min(Math.max(limit, 1), 10);
   const data = await gql<{
     filterTokens?: {
       results?: Array<{

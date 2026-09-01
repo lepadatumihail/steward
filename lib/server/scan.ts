@@ -33,10 +33,16 @@ const SPENDER_VERIFY_CAP = 40;
 const RESULT_CAP = 60;
 const CACHE_TTL_MS = 10 * 60 * 1000;
 /**
- * Empty results age fast: a wallet whose approve landed seconds ago, or one
- * that was just revoked on camera, must not read stale for ten minutes.
+ * Short TTL for wallets a human is actively changing. Emptiness was the wrong
+ * proxy: revoking ONE of several approvals leaves liveNonzero > 0, so the
+ * just-revoked row kept showing for the full ten minutes — the exact
+ * on-camera flow this was meant to fix. Any small result set is treated as
+ * freshness-sensitive; only genuinely large, slow-to-scan wallets get the
+ * long TTL, which is where the cache actually earns its keep.
  */
-const EMPTY_CACHE_TTL_MS = 60 * 1000;
+const FRESH_CACHE_TTL_MS = 60 * 1000;
+/** At or below this many live approvals, assume the user is mid-cleanup. */
+const FRESH_RESULT_MAX = 25;
 
 export interface ScanResult {
   approvals: AssessedApproval[];
@@ -68,7 +74,9 @@ export async function scanAddress(
   const hit = cache.get(key);
   if (hit) {
     const ttl =
-      hit.result.meta.liveNonzero > 0 ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS;
+      hit.result.meta.liveNonzero > FRESH_RESULT_MAX
+        ? CACHE_TTL_MS
+        : FRESH_CACHE_TTL_MS;
     if (Date.now() - hit.at < ttl) return hit.result;
   }
 
