@@ -33,6 +33,7 @@ import {
   type DiscoveredRow,
 } from "@/lib/steward/format";
 import {
+  AUDIT_CHAIN,
   parseChainArg,
   type AssessedApproval,
   type ChainId,
@@ -217,7 +218,7 @@ export function StewardApp() {
     // Read-only, and it carries token names the token itself chose.
     annotations: { readOnlyHint: true, untrustedContentHint: true },
     execute: async ({ address: requested, chain: chainArg }) => {
-      const targetChain: ChainId = parseChainArg(chainArg);
+      const targetChain: ChainId = parseChainArg(chainArg, AUDIT_CHAIN);
       const target = requested?.trim() || scanRef.current.address;
       if (requested && !looksLikeTarget(target)) {
         throw new Error(

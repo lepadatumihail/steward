@@ -101,14 +101,21 @@ export const SUPPORTED_CHAINS: readonly ChainId[] = ["ethereum", "base"];
 /**
  * Parse a chain argument from an agent.
  *
- * Two rules the hand-rolled ternaries got wrong:
- *  - ONE default across every tool, so the documented discover -> assess ->
- *    swap flow cannot silently change chains mid-pipeline;
- *  - an unrecognised chain THROWS instead of coercing, so "polygon" is an
- *    error the agent can correct, not an Ethereum transfer it never intended.
+ * The original bug was not "different defaults" — it was that the
+ * discover -> assess -> swap PIPELINE silently changed chains mid-flow. Those
+ * three tools therefore share `DEFAULT_CHAIN` (Base), while a standalone
+ * audit sensibly defaults to Ethereum, where full approval history lives.
+ * Each call site states its fallback so the choice is visible in review.
+ *
+ * Unchanged and non-negotiable: an unrecognised chain THROWS instead of
+ * coercing, so "polygon" is an error the agent can correct rather than an
+ * Ethereum transfer it never intended.
  */
-export function parseChainArg(raw: string | undefined | null): ChainId {
-  if (raw == null || raw.trim() === "") return DEFAULT_CHAIN;
+export function parseChainArg(
+  raw: string | undefined | null,
+  fallback: ChainId = DEFAULT_CHAIN,
+): ChainId {
+  if (raw == null || raw.trim() === "") return fallback;
   const v = raw.trim().toLowerCase();
   const hit = SUPPORTED_CHAINS.find((c) => c === v);
   if (hit) return hit;
@@ -117,5 +124,7 @@ export function parseChainArg(raw: string | undefined | null): ChainId {
   );
 }
 
-/** The one default. Base: cheap gas, where the demo and most staging happens. */
+/** Default for the trading pipeline (discover -> assess -> swap): cheap gas. */
 export const DEFAULT_CHAIN: ChainId = "base";
+/** Default for wallet auditing: Ethereum is where full approval history is. */
+export const AUDIT_CHAIN: ChainId = "ethereum";

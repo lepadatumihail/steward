@@ -233,11 +233,14 @@ export function formatDiscovered(chain: string, rows: DiscoveredRow[]): string {
         ? ""
         : ` ${r.change24Pct > 0 ? "+" : ""}${r.change24Pct.toFixed(1)}%/24h`;
     const price = r.priceUsd == null ? "?" : formatPriceUsd(r.priceUsd);
-    return `- ${sym} $${price}${chg}; vol ${money(r.volume24Usd)}; liq ${money(r.liquidityUsd)}; holders ${r.holders?.toLocaleString("en-US") ?? "?"}; addr=${r.address}`;
+    // chain= on every row: the agent must pass it to assess_token/stage_swap,
+    // so a Base discovery can never be assessed against Ethereum by omission.
+    return `- ${sym} $${price}${chg}; vol ${money(r.volume24Usd)}; liq ${money(r.liquidityUsd)}; holders ${r.holders?.toLocaleString("en-US") ?? "?"}; addr=${r.address}; chain=${chain}`;
   });
   return (
     `Top ${rows.length} ${chain} tokens by 24h volume (floors: liq>$250K, vol>$250K, holders>1K). ` +
-    `MARKET FACTS, NOT ENDORSEMENTS — run assess_token on any candidate before proposing it; ` +
+    `MARKET FACTS, NOT ENDORSEMENTS — run assess_token on any candidate before proposing it, ` +
+    `passing the chain= shown on its row; ` +
     `stage_swap refuses high-risk tokens regardless.\n` +
     lines.join("\n")
   );
