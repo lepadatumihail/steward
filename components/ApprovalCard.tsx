@@ -5,10 +5,10 @@ import { formatAmount, shortAddress } from "@/lib/steward/format";
 import type { AssessedApproval, RiskLevel } from "@/lib/steward/types";
 
 const LEVEL_STYLES: Record<RiskLevel, string> = {
-  critical: "border-red-900 bg-red-950/40 text-red-300",
-  high: "border-orange-900 bg-orange-950/40 text-orange-300",
-  medium: "border-yellow-900 bg-yellow-950/30 text-yellow-300",
-  low: "border-neutral-800 bg-neutral-900/40 text-neutral-400",
+  critical: "border-red-300 bg-red-50 text-red-700",
+  high: "border-orange-300 bg-orange-50 text-orange-700",
+  medium: "border-yellow-400 bg-yellow-50 text-yellow-800",
+  low: "border-neutral-200 bg-neutral-50 text-neutral-700",
 };
 
 export function ApprovalCard({
@@ -26,7 +26,7 @@ export function ApprovalCard({
   const hostile = approval.risk.metadataFlags.length > 0;
 
   return (
-    <article className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4">
+    <article className="rounded-xl border border-neutral-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -37,9 +37,9 @@ export function ApprovalCard({
               {approval.risk.level} {approval.risk.score}
             </span>
           </div>
-          <p className="mt-1 truncate text-xs text-neutral-500">
+          <p className="mt-1 truncate text-xs text-neutral-600">
             {approval.isUnlimited ? (
-              <span className="text-orange-400">Unlimited allowance</span>
+              <span className="text-orange-700">Unlimited allowance</span>
             ) : (
               `Allowance ${formatAmount(approval.allowanceRaw, approval.token.decimals)}`
             )}
@@ -48,14 +48,14 @@ export function ApprovalCard({
             {symbol.safe} at risk
             {" · "}approved {approval.approvedAt.slice(0, 10)}
           </p>
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-1 text-xs text-neutral-600">
             Spender:{" "}
             {approval.spender.knownProtocol ? (
-              <span className="text-neutral-400">
+              <span className="text-neutral-700">
                 {approval.spender.knownProtocol}
               </span>
             ) : (
-              <span className="text-orange-400">
+              <span className="text-orange-700">
                 unverified {shortAddress(approval.spender.address)}
               </span>
             )}
@@ -65,21 +65,21 @@ export function ApprovalCard({
         <button
           onClick={onStage}
           disabled={staged}
-          className="shrink-0 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium disabled:opacity-40 hover:bg-neutral-900 disabled:hover:bg-transparent"
+          className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40 hover:bg-neutral-100 disabled:hover:bg-transparent"
         >
           {staged ? "Staged" : "Stage revoke"}
         </button>
       </div>
 
       {hostile && (
-        <div className="mt-3 rounded-lg border border-red-900/70 bg-red-950/30 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-red-300">
+        <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-red-700">
             Quarantined — this token&apos;s metadata tried to talk to your agent
           </p>
-          <p className="mt-1 font-mono text-[11px] leading-relaxed text-red-200/70">
+          <p className="mt-1 font-mono text-[11px] leading-relaxed text-red-800/80">
             {name.safe}
           </p>
-          <p className="mt-2 text-[11px] text-red-300/80">
+          <p className="mt-2 text-[11px] text-red-700/90">
             Flags: {approval.risk.metadataFlags.join(", ")}. Shown as data.
             Steward fences this before any agent reads it.
           </p>
@@ -87,12 +87,12 @@ export function ApprovalCard({
       )}
 
       <details className="mt-3">
-        <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">
+        <summary className="cursor-pointer text-xs text-neutral-600 hover:text-neutral-900">
           Why this score
         </summary>
         <ul className="mt-2 space-y-1">
           {approval.risk.reasons.map((r) => (
-            <li key={r} className="text-xs leading-relaxed text-neutral-400">
+            <li key={r} className="text-xs leading-relaxed text-neutral-700">
               · {r}
             </li>
           ))}

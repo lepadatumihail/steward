@@ -6,19 +6,19 @@ import type { TokenIntel } from "@/lib/steward/types";
 
 const VERDICT_STYLES: Record<TokenIntel["verdict"], { badge: string; label: string }> = {
   "high-risk": {
-    badge: "border-red-900 bg-red-950/40 text-red-300",
+    badge: "border-red-300 bg-red-50 text-red-700",
     label: "high risk",
   },
   caution: {
-    badge: "border-yellow-900 bg-yellow-950/30 text-yellow-300",
+    badge: "border-yellow-400 bg-yellow-50 text-yellow-800",
     label: "caution",
   },
   "no-major-flags": {
-    badge: "border-emerald-900 bg-emerald-950/30 text-emerald-300",
+    badge: "border-emerald-300 bg-emerald-50 text-emerald-700",
     label: "no major flags",
   },
   "insufficient-data": {
-    badge: "border-neutral-700 bg-neutral-900/40 text-neutral-400",
+    badge: "border-neutral-300 bg-neutral-50 text-neutral-700",
     label: "insufficient data",
   },
 };
@@ -43,12 +43,12 @@ export function TokenIntelCard({
   const sourceCount = Object.values(intel.sources).filter(Boolean).length;
 
   return (
-    <section className="mt-6 rounded-xl border border-neutral-800 bg-neutral-950/60 p-4">
+    <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-neutral-300">
+          <h2 className="text-sm font-medium text-neutral-900">
             Token intel: {symbol.safe || "(unnamed)"}
-            <span className="ml-2 font-normal text-neutral-600">
+            <span className="ml-2 font-normal text-neutral-500">
               {shortAddress(intel.address)} · {intel.chain}
             </span>
           </h2>
@@ -60,14 +60,14 @@ export function TokenIntelCard({
         </div>
         <button
           onClick={onDismiss}
-          className="text-xs text-neutral-600 hover:text-neutral-400"
+          className="text-xs text-neutral-500 hover:text-neutral-700"
         >
           dismiss
         </button>
       </div>
 
       {intel.market && (
-        <p className="mt-2 text-xs text-neutral-500">
+        <p className="mt-2 text-xs text-neutral-600">
           {intel.market.priceUsd ? `$${intel.market.priceUsd}` : "price n/a"}
           {" · "}deepest pool {money(intel.market.liquidityUsd)}
           {" · "}24h volume {money(intel.market.volume24hUsd)}
@@ -77,8 +77,8 @@ export function TokenIntelCard({
               <span
                 className={
                   intel.market.priceChange24hPct < 0
-                    ? "text-red-400"
-                    : "text-emerald-400"
+                    ? "text-red-600"
+                    : "text-emerald-700"
                 }
               >
                 {intel.market.priceChange24hPct > 0 ? "+" : ""}
@@ -92,18 +92,18 @@ export function TokenIntelCard({
       {intel.signals.length > 0 ? (
         <ul className="mt-3 space-y-1">
           {intel.signals.map((s) => (
-            <li key={s} className="text-xs leading-relaxed text-neutral-400">
+            <li key={s} className="text-xs leading-relaxed text-neutral-700">
               · {s}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-xs text-neutral-600">
           No risk signals from any source.
         </p>
       )}
 
-      <p className="mt-3 text-[11px] text-neutral-600">
+      <p className="mt-3 text-[11px] text-neutral-500">
         {sourceCount}/3 independent sources answered (GoPlus, DexScreener,
         Honeypot.is). Security signals, not financial advice.
       </p>

@@ -513,25 +513,25 @@ export function StewardApp() {
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight">
             Steward
-            <span className="ml-3 text-sm font-normal text-neutral-400">
+            <span className="ml-3 text-sm font-normal text-neutral-700">
               wallet safety, agent-readable
             </span>
           </h1>
           <div className="flex items-center gap-3">
             <a
               href="https://github.com/lepadatumihail/steward"
-              className="text-xs text-neutral-500 underline-offset-4 hover:underline"
+              className="text-xs text-neutral-600 underline-offset-4 hover:underline"
             >
               open source
             </a>
             {connection.isConnected ? (
               <button
                 onClick={() => disconnect()}
-                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-900"
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100"
                 title="Disconnect wallet"
               >
                 {shortAddress(connection.address ?? "")} ·{" "}
-                <span className="text-neutral-500">disconnect</span>
+                <span className="text-neutral-600">disconnect</span>
               </button>
             ) : (
               <button
@@ -539,7 +539,7 @@ export function StewardApp() {
                   const injectedConnector = connectors[0];
                   if (injectedConnector) connect({ connector: injectedConnector });
                 }}
-                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium hover:bg-neutral-900"
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:bg-neutral-100"
               >
                 Connect wallet
               </button>
@@ -547,13 +547,13 @@ export function StewardApp() {
           </div>
         </div>
         {!connection.isConnected && connectError && (
-          <p className="mt-2 text-xs text-amber-400/80">
+          <p className="mt-2 text-xs text-amber-700">
             {connectError instanceof ProviderNotFoundError
               ? "No browser wallet found — Steward still works watch-only; a wallet is only needed to sign revokes."
               : connectError.message.split("\n")[0]}
           </p>
         )}
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-400">
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-700">
           Steward audits the token approvals a wallet has handed out, scores what
           each one puts at risk, and stages revokes for you to sign. An agent in
           your browser can drive all of it — but it can never sign anything. Only
@@ -573,12 +573,12 @@ export function StewardApp() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Audit any address or ENS name — no wallet needed (try vitalik.eth)"
-          className="min-w-0 flex-1 basis-56 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-neutral-600"
+          className="min-w-0 flex-1 basis-56 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-400"
         />
         <select
           value={chain}
           onChange={(e) => setChain(e.target.value as ChainId)}
-          className="rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-2 text-sm text-neutral-300"
+          className="rounded-lg border border-neutral-200 bg-white px-2 py-2 text-sm text-neutral-900"
           aria-label="Chain"
         >
           <option value="ethereum">Ethereum</option>
@@ -587,7 +587,7 @@ export function StewardApp() {
         <button
           type="submit"
           disabled={scan.status === "loading"}
-          className="rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium hover:bg-neutral-900 disabled:opacity-50"
+          className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100 disabled:opacity-50"
         >
           {scan.status === "loading" ? "Scanning…" : "Audit"}
         </button>
@@ -598,9 +598,9 @@ export function StewardApp() {
       {intel && <TokenIntelCard intel={intel} onDismiss={() => setIntel(null)} />}
 
       {scan.status === "error" && (
-        <div className="mt-6 rounded-xl border border-red-900/60 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
           Live scan unavailable: {scan.error}
-          <span className="block pt-1 text-xs text-red-300/70">
+          <span className="block pt-1 text-xs text-red-700/90">
             The demo address still works offline — every data source Steward uses
             is keyless public infrastructure, and sometimes it has a bad minute.
           </span>
@@ -609,20 +609,20 @@ export function StewardApp() {
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium text-neutral-300">
+          <h2 className="text-sm font-medium text-neutral-900">
             Approvals for {shortAddress(scan.address)}
             {scan.status === "demo" && (
-              <span className="ml-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+              <span className="ml-2 rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-700">
                 demo data
               </span>
             )}
             {scan.status === "live" && (
-              <span className="ml-2 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-300">
+              <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-700">
                 live · {scan.chain}
               </span>
             )}
           </h2>
-          <span className="text-xs text-neutral-500">
+          <span className="text-xs text-neutral-600">
             {scan.totalCount ?? scan.approvals.length} live
             {(scan.totalCount ?? 0) > scan.approvals.length
               ? ` · showing worst ${scan.approvals.length}`
@@ -631,18 +631,18 @@ export function StewardApp() {
           </span>
         </div>
         {scan.coverage && (
-          <p className="mb-3 text-xs text-neutral-600">
+          <p className="mb-3 text-xs text-neutral-500">
             Coverage: {scan.coverage}. Every allowance shown was verified live
             on-chain — approval events alone are forgeable.
           </p>
         )}
         <div className="space-y-3">
           {scan.status === "loading" ? (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-8 text-center text-sm text-neutral-500">
+            <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-600">
               Scanning approval history and verifying live allowances on-chain…
             </div>
           ) : scan.approvals.length === 0 ? (
-            <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/10 p-8 text-center text-sm text-neutral-400">
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-8 text-center text-sm text-neutral-700">
               No live token approvals found for {shortAddress(scan.address)}.
               This wallet is clean — nothing to revoke.
             </div>
@@ -663,7 +663,7 @@ export function StewardApp() {
 
       {staged.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-3 text-sm font-medium text-neutral-300">
+          <h2 className="mb-3 text-sm font-medium text-neutral-900">
             Review queue — {staged.length} staged, awaiting your signature
           </h2>
           <div className="space-y-3">
@@ -680,7 +680,7 @@ export function StewardApp() {
         </section>
       )}
 
-      <footer className="mt-16 border-t border-neutral-900 pt-6 text-xs leading-relaxed text-neutral-600">
+      <footer className="mt-16 border-t border-neutral-200 pt-6 text-xs leading-relaxed text-neutral-500">
         Steward never holds keys and never sends a transaction on its own. Token
         names are attacker-controlled and are quarantined before any agent sees
         them. The demo address is a deterministic fixture (including its planted

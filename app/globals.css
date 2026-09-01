@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  /* Steward is dark-first: this is a security tool, not a marketing page. */
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  /* Light-first: the demo is read off a projector, so contrast wins. */
+  color-scheme: light;
+  --background: #fafafa;
+  --foreground: #171717;
 }
 
 @theme inline {
