@@ -32,6 +32,11 @@ const SPENDER_VERIFY_CAP = 40;
 /** Worst-N returned to callers; a 2,000-row payload helps nobody. */
 const RESULT_CAP = 60;
 const CACHE_TTL_MS = 10 * 60 * 1000;
+/**
+ * Empty results age fast: a wallet whose approve landed seconds ago, or one
+ * that was just revoked on camera, must not read stale for ten minutes.
+ */
+const EMPTY_CACHE_TTL_MS = 60 * 1000;
 
 export interface ScanResult {
   approvals: AssessedApproval[];
@@ -61,7 +66,11 @@ export async function scanAddress(
   const key = `${chain}:${address.toLowerCase()}`;
 
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.result;
+  if (hit) {
+    const ttl =
+      hit.result.meta.liveNonzero > 0 ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS;
+    if (Date.now() - hit.at < ttl) return hit.result;
+  }
 
   const running = inflight.get(key);
   if (running) return running;

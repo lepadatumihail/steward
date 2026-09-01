@@ -52,7 +52,7 @@ export async function GET(request: Request): Promise<Response> {
       headers: {
         "content-type": "application/json",
         // CDN-cacheable: repeat judge clicks and agent calls hit the edge.
-        "cache-control": "public, s-maxage=600, stale-while-revalidate=3600",
+        "cache-control": "public, s-maxage=120, stale-while-revalidate=600",
       },
     });
   } catch (cause) {
