@@ -125,7 +125,7 @@ never claims support that isn't there.
 
 ```bash
 pnpm install && pnpm dev   # run locally
-bun test                   # 35 tests: quarantine, formatting, id resolution
+bun test                   # 51 tests: quarantine, formatting, swap gate, id resolution
 bun run scripts/verify-native-webmcp.ts   # prove native registration via CDP
 ```
 

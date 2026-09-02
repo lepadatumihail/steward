@@ -14,6 +14,7 @@ import { wagmiConfig } from "./Providers";
 import { ProviderNotFoundError,
   useConnect, useConnection, useDisconnect } from "wagmi";
 import { useStewardTool } from "@/lib/webmcp/useStewardTool";
+import type { ToolResult } from "@/lib/webmcp/types";
 import {
   getModelContextMode,
   installShim,
@@ -42,6 +43,8 @@ import {
 } from "@/lib/steward/types";
 import { ApprovalCard } from "./ApprovalCard";
 import { StagedActionCard } from "./StagedActionCard";
+import { AgentViewCard } from "./AgentViewCard";
+import { DiscoveredTokensCard } from "./DiscoveredTokensCard";
 import { TokenIntelCard } from "./TokenIntelCard";
 import { ToolStatusPanel } from "./ToolStatusPanel";
 
@@ -97,6 +100,12 @@ export function StewardApp() {
   const [chain, setChain] = useState<ChainId>("ethereum");
   const [staged, setStaged] = useState<StagedAction[]>([]);
   const [intel, setIntel] = useState<TokenIntel | null>(null);
+  // Dismissing hides one specific envelope; the next call shows again.
+  const [hiddenAgentView, setHiddenAgentView] = useState<ToolResult | null>(null);
+  const [discovered, setDiscovered] = useState<{
+    chain: string;
+    rows: DiscoveredRow[];
+  } | null>(null);
   // Read after mount: the server has no model context, so reading during render
   // would produce a hydration mismatch.
   const [contextMode, setContextMode] = useState<ModelContextMode>("none");
@@ -674,6 +683,7 @@ export function StewardApp() {
         );
       }
       const body = (await res.json()) as { chain: string; tokens: DiscoveredRow[] };
+      setDiscovered({ chain: body.chain, rows: body.tokens }); // the dashboard shows what the agent just saw
       return formatDiscovered(body.chain, body.tokens);
     },
   });
@@ -781,6 +791,22 @@ export function StewardApp() {
       </form>
 
       <ToolStatusPanel tools={tools} mode={contextMode} />
+
+      {explainTool.lastOutput && explainTool.lastOutput !== hiddenAgentView && (
+        <AgentViewCard
+          tool="explain_approval"
+          output={explainTool.lastOutput}
+          onDismiss={() => setHiddenAgentView(explainTool.lastOutput)}
+        />
+      )}
+
+      {discovered && (
+        <DiscoveredTokensCard
+          chain={discovered.chain}
+          rows={discovered.rows}
+          onDismiss={() => setDiscovered(null)}
+        />
+      )}
 
       {intel && <TokenIntelCard intel={intel} onDismiss={() => setIntel(null)} />}
 

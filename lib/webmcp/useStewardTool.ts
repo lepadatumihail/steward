@@ -55,6 +55,8 @@ export interface UseStewardToolState {
   error: Error | null;
   /** How many times an agent has called this tool this session. */
   invocations: number;
+  /** The exact envelope the most recent call returned, so the UI can show what the agent saw. */
+  lastOutput: ToolResult | null;
 }
 
 /** Coerce whatever a tool returned into the canonical MCP envelope. */
@@ -118,6 +120,7 @@ export function useStewardTool<Args = Record<string, unknown>>(
   const [registered, setRegistered] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [invocations, setInvocations] = useState(0);
+  const [lastOutput, setLastOutput] = useState<ToolResult | null>(null);
 
   // Keep the latest callbacks without forcing re-registration on every render.
   const executeRef = useRef(execute);
@@ -151,18 +154,21 @@ export function useStewardTool<Args = Record<string, unknown>>(
               }
             : envelope,
         );
+      let out: ToolResult;
       try {
         const raw = await executeRef.current(args, ctx);
-        return finalize(toEnvelope(raw));
+        out = finalize(toEnvelope(raw));
       } catch (cause) {
         // Descriptive errors let the model self-correct rather than retry blind.
         const message =
           cause instanceof Error ? cause.message : String(cause);
-        return finalize({
+        out = finalize({
           content: [{ type: "text", text: `Tool "${name}" failed: ${message}` }],
           isError: true,
         });
       }
+      setLastOutput(out); // the human can always see what the agent saw
+      return out;
     },
     [name, untrusted],
   );
@@ -231,5 +237,5 @@ export function useStewardTool<Args = Record<string, unknown>>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, description, schemaKey, annotationsKey, enabled, wrappedExecute]);
 
-  return { supported, registered, error, invocations };
+  return { supported, registered, error, invocations, lastOutput };
 }
